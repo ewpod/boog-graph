@@ -141,8 +141,8 @@ function create_graph(ev) {
         by_age.push(player_data.get('age'));
     }
 
-    //console.log(cumulative, by_age);
     graph_points('cumulative', cumulative);
+    graph_points('age', by_age);
 }
 
 function graph_points(element_id, seasons) {
@@ -198,9 +198,9 @@ function graph_points(element_id, seasons) {
         .selectAll('path')
         .data(seasons)
         .join('path')
-        .attr('d', line)
-        .attr('stroke', color)
-    ;
+            .attr('d', line)
+            .attr('stroke', color)
+        ;
 }
 
 
