@@ -14,7 +14,6 @@ def process_maws(maws_csv):
                 maws[row['Player']] = []
             player = maws[row['Player']]
             cleaned_row = {
-                'Season': int(row['Season']),
                 'Age': int(row['Age']),
                 'MAWS': float(row['MAWS']),
                 'Cumulative': float(row['Cumulative']),
@@ -35,7 +34,7 @@ def main():
     args = options()
     maws = process_maws(args.maws)
     with open(args.output, 'w') as out:
-        json.dump(maws, out)
+        json.dump(maws, out, sort_keys=True, separators=(',', ':'))
 
 
 if __name__ == '__main__':
