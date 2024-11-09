@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>MAWS Graphs</title>
+        <meta charset="utf-8">
+        <style>
+            .settings {
+                display: flex;
+                justify-content: space-between;
+                width: 45em;
+                margin: 0.5em;
+            }
+
+            .settings h3 {
+                margin-top: 0px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>MAWS Graphs</h1>
+        <div class="settings">
+            <div>
+                <select id="player-list"></select>
+                <ul id="chosen-players"></ul>
+                <button id="create" type="button">Create MAWS Graph</button>
+            </div>
+            <div>
+                <h3>About the graphs</h3>
+                <dl>
+                    <dt>Cumulative</dt>
+                    <dd>The selected player(s) career MAWS by age.</dd>
+
+                    <dt>By Age</dt>
+                    <dd>The selected player(s) single season MAWS by age.</dd>
+                </dl>
+            </div>
+        </div>
+        <div id="cumulative"></div>
+        <div id="age"></div>
+        <script src="d3.v7.min.js"></script>
+        <script async src="graph.js" type="module"></script>
+    </body>
+</html>
