@@ -147,12 +147,18 @@ function create_graph(ev) {
 
 function graph_points(element_id, seasons) {
     const graph_dimensions = {
-        height: 600,
-        width: 900,
+        height: 500,
+        width: 800,
+        legend: 200,
         top: 10,
         right: 20,
         bottom: 40,
         left: 30,
+    };
+
+    const legend_dimensions = {
+        box: 20,
+        box_offset: 30,
     };
 
     console.log(seasons);
@@ -163,7 +169,9 @@ function graph_points(element_id, seasons) {
     let svg = d3.select(`#${element_id}`)
         .append('svg')
         .attr('height', graph_dimensions.height + graph_dimensions.top + graph_dimensions.bottom)
-        .attr('width', graph_dimensions.width + graph_dimensions.left + graph_dimensions.right)
+        .attr('width', graph_dimensions.width + graph_dimensions.left + graph_dimensions.right + graph_dimensions.legend);
+
+    let graph = svg
         .append('g')
         .attr('transform', `translate(${graph_dimensions.left}, ${graph_dimensions.top})`)
         ;
@@ -173,7 +181,7 @@ function graph_points(element_id, seasons) {
         .domain(d3.extent(age_extents))
         .range([0, graph_dimensions.width]);
         ;
-    svg.append('g')
+    graph.append('g')
         .attr('transform', `translate(0, ${graph_dimensions.height})`)
         .call(d3.axisBottom(x));
 
@@ -182,7 +190,7 @@ function graph_points(element_id, seasons) {
         .domain(d3.extent(maws_extents))
         .range([graph_dimensions.height, 0])
         .nice();
-    svg.append('g')
+    graph.append('g')
         .attr('class', 'grid')
         .call(d3.axisLeft(y)
             .tickSize(-graph_dimensions.width));
@@ -192,7 +200,7 @@ function graph_points(element_id, seasons) {
     const line = d3.line()
         .x((d) => x(d[0]))
         .y((d) => y(d[1]));
-    svg.append('g')
+    graph.append('g')
         .attr('stroke-width', 2.5)
         .attr('fill', 'none')
         .selectAll('path')
@@ -200,6 +208,35 @@ function graph_points(element_id, seasons) {
         .join('path')
             .attr('d', line)
             .attr('stroke', color)
+        ;
+
+    const names = seasons.flatMap((season) => season[0][2]);
+    console.log(names);
+    var legend_area = svg.append('g')
+        .attr('transform', `translate(${graph_dimensions.left * 2 + graph_dimensions.width}, 0)`);
+    var legend = legend_area.selectAll('.legend')
+        .data(names)
+        .enter()
+            .append('g')
+            .attr('class', 'legend')
+            .attr('transform', (d, i) => `translate(0, ${i * legend_dimensions.box_offset})`)
+        ;
+
+    // TODO: Use same color variable instead of resetting.
+    const color_names = d3.scaleOrdinal(d3.schemeTableau10);
+    legend.append('rect')
+        .attr('x', 0)
+        .attr('width', legend_dimensions.box)
+        .attr('height', legend_dimensions.box)
+        .style('fill', color_names)
+        ;
+
+    legend.append('text')
+        .attr('x', legend_dimensions.box + 5)
+        .attr('y', legend_dimensions.box / 2)
+        .attr('dy', '.35em')
+        .style('text-anchor', 'start')
+        .text((d) => d)
         ;
 }
 
