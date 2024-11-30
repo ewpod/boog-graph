@@ -2,21 +2,21 @@ let players = new Map();
 
 
 function init() {
-    let resp = fetch('maws.json')
+    let resp = fetch('boog.json')
         .then((response) => response.json())
         .then(load_players);
 }
 
-function load_players(maws_json) {
+function load_players(boog_json) {
     let all_names = [];
-    for (let player_name in maws_json) {
+    for (let player_name in boog_json) {
         all_names.push(player_name);
         let cumulative = [];
         let by_age = [];
-        let seasons = maws_json[player_name];
+        let seasons = boog_json[player_name];
         for (let season of seasons) {
             cumulative.push([season.Age, season.Cumulative, player_name]);
-            by_age.push([season.Age, season.MAWS, player_name]);
+            by_age.push([season.Age, season.BOOG, player_name]);
         }
         let player = new Map();
         player.set('cumulative', cumulative);
@@ -185,9 +185,9 @@ function graph_points(element_id, seasons) {
         .attr('transform', `translate(0, ${graph_dimensions.height})`)
         .call(d3.axisBottom(x));
 
-    const maws_extents = seasons.flatMap((season) => d3.extent(season, d => d[1]));
+    const boog_extents = seasons.flatMap((season) => d3.extent(season, d => d[1]));
     const y = d3.scaleLinear()
-        .domain(d3.extent(maws_extents))
+        .domain(d3.extent(boog_extents))
         .range([graph_dimensions.height, 0])
         .nice();
     graph.append('g')
