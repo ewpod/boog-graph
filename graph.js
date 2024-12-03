@@ -24,7 +24,8 @@ function load_players(boog_json) {
         players.set(player_name, player);
     }
 
-    all_names.sort();
+    let collator = new Intl.Collator('en');
+    all_names.sort(collator.compare);
     load_datalist_names(all_names);
     setup_events();
 }
