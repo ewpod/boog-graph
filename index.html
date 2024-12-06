@@ -14,24 +14,33 @@
             .settings h3 {
                 margin-top: 0px;
             }
+
+            .add-players {
+                padding-right: 20px;
+            }
         </style>
     </head>
     <body>
         <h1>Better than Other Ordinary Guys Graphs</h1>
         <div class="settings">
-            <div>
+            <div class="add-players">
                 <select id="player-list"></select>
                 <ul id="chosen-players"></ul>
                 <button id="create" type="button">Create BOOG Graph</button>
             </div>
             <div>
+                <h3>What is BOOG?</h3>
+                <p>BOOG score (Better than Other Ordinary Guys) is a metric designed to separate the cream of the crop among MLB players.</p>
+                <p>Calculating BOOG score is simple: it's a player's career WAA (Wins Above Average) total, with all negative seasons zeroed out and ignored.</p>
+                <p>The intent is to recognize greatness on the field as measured by how far you stand above the median, rather than using replacement level as in WAR-based metrics such as JAWS.</p>
+                <p>This metric leans more in favor of peak value than WAR, but still recognizes longevity <i>if a player continues to contribute at a notable level</i> above his peers.</p>
+                <p>It is named for Orioles MVP first baseman and barbecue connoisseur Boog Powell, whose career trajectory is uniquely appreciated using this approach.</p>
                 <h3>About the graphs</h3>
                 <dl>
                     <dt>Cumulative</dt>
-                    <dd>The selected player(s) career BOOG by age.</dd>
-
+                    <dd>The selected player(s) total career BOOG score by age.</dd>
                     <dt>By Age</dt>
-                    <dd>The selected player(s) single season BOOG by age.</dd>
+                    <dd>The selected player(s) single season BOOG score by age.</dd>
                 </dl>
             </div>
         </div>
