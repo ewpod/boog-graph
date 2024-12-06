@@ -7,7 +7,6 @@
             .settings {
                 display: flex;
                 justify-content: space-between;
-                width: 45em;
                 margin: 0.5em;
             }
 
@@ -16,8 +15,12 @@
             }
 
             .add-players {
-                padding-right: 20px;
+                flex: 1 18em;
             }
+
+            .description {
+                flex: 9 50em;
+            };
         </style>
     </head>
     <body>
@@ -28,7 +31,7 @@
                 <ul id="chosen-players"></ul>
                 <button id="create" type="button">Create BOOG Graph</button>
             </div>
-            <div>
+            <div class="description">
                 <h3>What is BOOG?</h3>
                 <p>BOOG score (Better than Other Ordinary Guys) is a metric designed to separate the cream of the crop among MLB players.</p>
                 <p>Calculating BOOG score is simple: it's a player's career WAA (Wins Above Average) total, with all negative seasons zeroed out and ignored.</p>
