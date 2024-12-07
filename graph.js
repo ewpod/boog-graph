@@ -108,7 +108,7 @@ function add_player_to_list(player_name) {
 
     // add 'Remove All' button if not present
     if (!document.getElementById('remove-all')) {
-        let players_div = document.getElementsByClassName('add-players')[0];
+        let players_div = document.getElementById('add-players');
         let remove_all = document.createElement('button');
         remove_all.id = 'remove-all';
         remove_all.innerText = 'Remove All Players';
