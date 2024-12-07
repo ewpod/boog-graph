@@ -105,6 +105,33 @@ function add_player_to_list(player_name) {
     player_li.appendChild(link_after);
     player_li.dataset.playerName = player_name;
     player_list.appendChild(player_li);
+
+    // add 'Remove All' button if not present
+    if(!document.getElementById('remove-all')) {
+        let players_div = document.getElementsByClassName('add-players')[0];
+        let remove_all = document.createElement('button');
+        remove_all.id = 'remove-all';
+        remove_all.innerText = 'Remove All Players';
+        remove_all.addEventListener('click', remove_all_players);
+        players_div.appendChild(remove_all);
+    }
+}
+
+function remove_all_players(ev) {
+    ev.preventDefault();
+    let player_list = document.getElementById('chosen-players');
+    if (!player_list) {
+        return;
+    }
+
+    while (player_list.firstChild) {
+        player_list.removeChild(player_list.lastChild);    
+    }
+    let remove_all_btn = document.getElementById('remove-all');
+    if (!remove_all_btn) {
+        return;
+    }
+    remove_all_btn.remove();
 }
 
 function remove_player(ev) {
