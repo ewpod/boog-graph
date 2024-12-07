@@ -107,7 +107,7 @@ function add_player_to_list(player_name) {
     player_list.appendChild(player_li);
 
     // add 'Remove All' button if not present
-    if(!document.getElementById('remove-all')) {
+    if (!document.getElementById('remove-all')) {
         let players_div = document.getElementsByClassName('add-players')[0];
         let remove_all = document.createElement('button');
         remove_all.id = 'remove-all';
@@ -125,7 +125,7 @@ function remove_all_players(ev) {
     }
 
     while (player_list.firstChild) {
-        player_list.removeChild(player_list.lastChild);    
+        player_list.removeChild(player_list.lastChild);
     }
     let remove_all_btn = document.getElementById('remove-all');
     if (!remove_all_btn) {
