@@ -13,16 +13,16 @@ def process_boog(boog_csv):
             if row['Player'] not in boog:
                 boog[row['Player']] = []
             player = boog[row['Player']]
-            cleaned_row = {
-                'Age': int(row['Age']),
-                'BOOG': float(row['BOOG']),
-                'Cumulative': float(row['Cumulative']),
-            }
-            #cleaned_row = [
-            #    int(row['Age']),
-            #    float(row['BOOG']),
-            #    float(row['Cumulative']),
-            #]
+            #cleaned_row = {
+            #    'Age': int(row['Age']),
+            #    'BOOG': float(row['BOOG']),
+            #    'Cumulative': float(row['Cumulative']),
+            #}
+            cleaned_row = [
+                int(row['Age']),
+                float(row['BOOG']),
+                float(row['Cumulative']),
+            ]
             player.append(cleaned_row)
     return boog
 

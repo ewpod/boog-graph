@@ -15,8 +15,8 @@ function load_players(boog_json) {
         let by_age = [];
         let seasons = boog_json[player_name];
         for (let season of seasons) {
-            cumulative.push([season.Age, season.Cumulative, player_name]);
-            by_age.push([season.Age, season.BOOG, player_name]);
+            cumulative.push([season[0], season[2], player_name]);
+            by_age.push([season[0], season[1], player_name]);
         }
         let player = new Map();
         player.set('cumulative', cumulative);
