@@ -170,7 +170,9 @@ function create_graph(ev) {
     }
 
     graph_points('cumulative', cumulative);
+    svg_to_png('cumulative');
     graph_points('age', by_age);
+    svg_to_png('age');
 }
 
 function graph_points(element_id, seasons) {
@@ -263,6 +265,55 @@ function graph_points(element_id, seasons) {
         .style('text-anchor', 'start')
         .text((d) => d)
         ;
+}
+
+function svg_to_png(element_id) {
+    const element = document.getElementById(element_id);
+    if (!element) {
+        return;
+    }
+    const canvas_id = element_id + '-canvas';
+    const canvas = document.getElementById(canvas_id);
+    if (!canvas) {
+        return;
+    }
+    const anchor_id = element_id + '-png';
+    const anchor = document.getElementById(anchor_id);
+    if (!anchor) {
+        return;
+    }
+
+    let svg;
+    for (let child of element.childNodes) {
+        if (child.nodeName === 'svg') {
+            svg = child;
+            break;
+        }
+    }
+
+    const svg_xml = (new XMLSerializer()).serializeToString(svg);
+    const svg_blob = new Blob([svg_xml], { type: 'image/svg+xml;charset=utf-8' });
+
+    const url = URL.createObjectURL(svg_blob);
+
+    const image = new Image();
+    image.width = svg.width.baseVal.value;
+    image.height = svg.height.baseVal.value;
+    image.src = url;
+    image.onload = function () {
+        canvas.width = image.width;
+        canvas.height = image.height;
+
+        const ctx = canvas.getContext('2d');
+        // Draw a white background frst because the SVG is transparent.
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, 0, 0);
+        URL.revokeObjectURL(url);
+        let data = canvas.toDataURL('image/png');
+        anchor.className = "";
+        anchor.href = data;
+    };
 }
 
 

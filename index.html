@@ -20,7 +20,11 @@
 
             .description {
                 flex: 9 50em;
-            };
+            }
+
+            .hidden {
+                display: none;
+            }
         </style>
     </head>
     <body>
@@ -47,11 +51,19 @@
                 </dl>
             </div>
         </div>
-        <div id="cumulative">
+        <div>
             <h3>Cumulative</h3>
+            <div id="cumulative"></div>
+            <canvas class="hidden" id="cumulative-canvas"></canvas>
+            <a id="cumulative-png" class="hidden" href="#">View as PNG</a>
         </div>
-        <div id="age">
+        <div>
             <h3>By Age</h3>
+            <div id="age"></div>
+            <canvas id="age-canvas"></canvas>
+            <a id="age-png" class="hidden" href="#">View as PNG</a>
+        </div>
+        <div>
         </div>
         <script src="d3.v7.min.js"></script>
         <script async src="graph.js" type="module"></script>
