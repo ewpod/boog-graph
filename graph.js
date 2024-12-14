@@ -189,8 +189,6 @@ function graph_points(element_id, seasons) {
         box_offset: 30,
     };
 
-    console.log(seasons);
-
     // Clear any existing graphs first.
     d3.select(`#${element_id}`).selectAll('svg').remove();
 
@@ -239,7 +237,6 @@ function graph_points(element_id, seasons) {
         ;
 
     const names = seasons.flatMap((season) => season[0][2]);
-    console.log(names);
     var legend_area = svg.append('g')
         .attr('transform', `translate(${graph_dimensions.left * 2 + graph_dimensions.width}, 0)`);
     var legend = legend_area.selectAll('.legend')
