@@ -169,21 +169,22 @@ function create_graph(ev) {
         by_age.push(player_data.get('age'));
     }
 
-    graph_points('cumulative', cumulative);
+    graph_points('cumulative', cumulative, "Cumulative BOOG");
     svg_to_image('cumulative');
-    graph_points('age', by_age);
+    graph_points('age', by_age, "BOOG By Age");
     svg_to_image('age');
 }
 
-function graph_points(element_id, seasons) {
+function graph_points(element_id, seasons, title) {
     const graph_dimensions = {
         height: 500,
         width: 800,
         legend: 200,
-        top: 10,
-        right: 20,
-        bottom: 40,
-        left: 30,
+        margin: 10,
+        top: 50,
+        right: 10,
+        bottom: 50,
+        left: 60,
     };
 
     const legend_dimensions = {
@@ -199,6 +200,32 @@ function graph_points(element_id, seasons) {
         .attr('height', graph_dimensions.height + graph_dimensions.top + graph_dimensions.bottom)
         .attr('width', graph_dimensions.width + graph_dimensions.left + graph_dimensions.right + graph_dimensions.legend);
 
+    // Add the title.
+    const graph_title = svg.append('text')
+        .attr('x', '50%')
+        .attr('y', (graph_dimensions.top + graph_dimensions.margin) / 2)
+        .attr('font-size', '150%')
+        .style('text-anchor', 'middle')
+        .text((d) => title)
+        ;
+
+    // Add the labels for the axes.
+    const x_label_y = graph_dimensions.top + graph_dimensions.height + graph_dimensions.bottom - graph_dimensions.margin;
+    const x_label = svg.append('text')
+        .attr('x', '50%')
+        .attr('y', x_label_y)
+        .style('text-anchor', 'middle')
+        .text((d) => "Age (years)")
+        ;
+    const y_label = svg.append('text')
+        .attr('x', graph_dimensions.margin)
+        .attr('y', '50%')
+        .attr('transform', `rotate(-90 ${graph_dimensions.margin} ${x_label_y / 2 - graph_dimensions.margin})`)
+        .style('text-anchor', 'middle')
+        .text((d) => "BOOG Score")
+        ;
+
+    // Create the graph.
     let graph = svg
         .append('g')
         .attr('transform', `translate(${graph_dimensions.left}, ${graph_dimensions.top})`)
@@ -224,7 +251,6 @@ function graph_points(element_id, seasons) {
             .tickSize(-graph_dimensions.width));
 
     const color = d3.scaleOrdinal(d3.schemeTableau10);
-
     const line = d3.line()
         .x((d) => x(d[0]))
         .y((d) => y(d[1]));
@@ -238,9 +264,10 @@ function graph_points(element_id, seasons) {
             .attr('stroke', color)
         ;
 
+    // Create the legend.
     const names = seasons.flatMap((season) => season[0][2]);
     var legend_area = svg.append('g')
-        .attr('transform', `translate(${graph_dimensions.left * 2 + graph_dimensions.width}, 0)`);
+        .attr('transform', `translate(${graph_dimensions.left + legend_dimensions.box + graph_dimensions.width}, ${graph_dimensions.top})`);
     var legend = legend_area.selectAll('.legend')
         .data(names)
         .enter()
