@@ -170,9 +170,9 @@ function create_graph(ev) {
     }
 
     graph_points('cumulative', cumulative);
-    svg_to_png('cumulative');
+    svg_to_image('cumulative');
     graph_points('age', by_age);
-    svg_to_png('age');
+    svg_to_image('age');
 }
 
 function graph_points(element_id, seasons) {
@@ -267,7 +267,7 @@ function graph_points(element_id, seasons) {
         ;
 }
 
-function svg_to_png(element_id) {
+function svg_to_image(element_id) {
     const element = document.getElementById(element_id);
     if (!element) {
         return;
@@ -277,7 +277,7 @@ function svg_to_png(element_id) {
     if (!canvas) {
         return;
     }
-    const anchor_id = element_id + '-png';
+    const anchor_id = element_id + '-image';
     const anchor = document.getElementById(anchor_id);
     if (!anchor) {
         return;
