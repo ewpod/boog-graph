@@ -10,18 +10,18 @@ def process_boog(boog_csv):
     with open(boog_csv) as boog_input:
         boog_reader = csv.DictReader(boog_input)
         for row in boog_reader:
-            if row['Player'] not in boog:
-                boog[row['Player']] = []
-            player = boog[row['Player']]
+            if row['name'] not in boog:
+                boog[row['name']] = []
+            player = boog[row['name']]
             #cleaned_row = {
             #    'Age': int(row['Age']),
             #    'BOOG': float(row['BOOG']),
             #    'Cumulative': float(row['Cumulative']),
             #}
             cleaned_row = [
-                int(row['Age']),
-                float(row['BOOG']),
-                float(row['Cumulative']),
+                int(row['age']),
+                float(row['season_BOOG']),
+                float(row['career_to_date_BOOG']),
             ]
             player.append(cleaned_row)
     return boog
