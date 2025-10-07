@@ -40,14 +40,20 @@
                 <p>BOOG score (Better than Other Ordinary Guys) is a metric designed to separate the cream of the crop among MLB players.</p>
                 <p>Calculating BOOG score is simple: it's a player's career WAA (Wins Above Average) total, with all negative seasons zeroed out and ignored.</p>
                 <p>The intent is to recognize greatness on the field as measured by how far you stand above the median, rather than using replacement level as in WAR-based metrics such as JAWS.</p>
-                <p>This metric leans more in favor of peak value than WAR, but still recognizes longevity <i>if a player continues to contribute at a notable level</i> above his peers.</p>
+                <p>This metric leans more in favor of peak value than WAR, but still recognizes longevity <em>if a player continues to contribute at a notable level</em> above his peers.</p>
                 <p>It is named for Orioles MVP first baseman and barbecue connoisseur Boog Powell, whose career trajectory is uniquely appreciated using this approach.</p>
+                <p><b>Median HOF</b> describes the career trajectory of a middle-of-the-road Hall of Fame inductee (split out to pitchers or position players). <b>Median BBWAA</b> is the same but for BBWAA electees only.</p>
+                <p><b>Marginal HOF</b> describes the Nth best career through a given age, where N is the total current number of Hall of Fame inductees (split out to pitchers or position players). <b>Marginal BBWAA</b> is the same but for BBWAA electees only.</p>
                 <h3>About the graphs</h3>
                 <dl>
                     <dt>Cumulative</dt>
                     <dd>The selected player(s) total career BOOG score by age.</dd>
                     <dt>By Age</dt>
                     <dd>The selected player(s) single season BOOG score by age.</dd>
+                    <dt>Hall of Fame Chances By Age</dt>
+                    <dd>Estimates the selected player(s) chance of reaching the Hall of Fame by considering the careers of other players with a similar BOOG score through the same age.</dd>
+                    <dt>BBWAA Induction Chances By Age</dt>
+                    <dd>Same as above, but specifically for the chance of election by the BBWAA (generally a higher standard).</dd>
                 </dl>
             </div>
         </div>
@@ -62,6 +68,18 @@
             <div id="age"></div>
             <canvas class="hidden" id="age-canvas"></canvas>
             <a id="age-image" class="hidden" href="#">View image</a>
+        </div>
+        <div>
+            <h3>Hall of Fame Chances By Age</h3>
+            <div id="hof"></div>
+            <canvas class="hidden" id="hof-canvas"></canvas>
+            <a id="hof-image" class="hidden" href="#">View image</a>
+        </div>
+        <div>
+            <h3>BBWAA Induction Chances By Age</h3>
+            <div id="bbwaa"></div>
+            <canvas class="hidden" id="bbwaa-canvas"></canvas>
+            <a id="bbwaa-image" class="hidden" href="#">View image</a>
         </div>
         <div>
         </div>

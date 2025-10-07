@@ -14,14 +14,23 @@ def process_boog(boog_csv):
                 boog[row['name']] = []
             player = boog[row['name']]
             season_boog = None
+            career_boog = None
+            hof_rate = None
+            bbwaa_rate = None
             if row['season_BOOG']:
                 season_boog = float(row['season_BOOG'])
             if row['career_to_date_BOOG']:
                 career_boog = float(row['career_to_date_BOOG'])
+            if row['hof_rate']:
+                hof_rate = float(row['hof_rate'])
+            if row['bbwaa_rate']:
+                bbwaa_rate = float(row['bbwaa_rate'])
             cleaned_row = [
                 int(row['age']),
                 season_boog,
                 career_boog,
+                hof_rate,
+                bbwaa_rate
             ]
             player.append(cleaned_row)
     return boog

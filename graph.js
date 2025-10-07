@@ -13,14 +13,20 @@ function load_players(boog_json) {
         all_names.push(player_name);
         let cumulative = [];
         let by_age = [];
+        let hof = [];
+        let bbwaa = [];
         let seasons = boog_json[player_name];
         for (let season of seasons) {
             cumulative.push([season[0], season[2], player_name]);
             by_age.push([season[0], season[1], player_name]);
+            hof.push([season[0], season[3], player_name]);
+            bbwaa.push([season[0], season[4], player_name])
         }
         let player = new Map();
         player.set('cumulative', cumulative);
         player.set('age', by_age);
+        player.set('hof', hof);
+        player.set('bbwaa', bbwaa);
         players.set(player_name, player);
     }
 
@@ -158,7 +164,9 @@ function create_graph(ev) {
     }
 
     let cumulative = [];
-    let by_age = []
+    let by_age = [];
+    let hof = [];
+    let bbwaa = [];
     for (let node of player_list.childNodes) {
         if (!node.dataset || !node.dataset.playerName) {
             continue;
@@ -167,12 +175,18 @@ function create_graph(ev) {
         let player_data = players.get(name);
         cumulative.push(player_data.get('cumulative'));
         by_age.push(player_data.get('age'));
+        hof.push(player_data.get('hof'));
+        bbwaa.push(player_data.get('bbwaa'));
     }
 
     graph_points('cumulative', cumulative, "Cumulative BOOG");
     svg_to_image('cumulative');
     graph_points('age', by_age, "BOOG By Age");
     svg_to_image('age');
+    graph_points('hof', hof, "Hall of Fame Chances By Age");
+    svg_to_image('hof');
+    graph_points('bbwaa', bbwaa, "BBWAA Induction Chances By Age");
+    svg_to_image('bbwaa');
 }
 
 function graph_points(element_id, seasons, title) {
