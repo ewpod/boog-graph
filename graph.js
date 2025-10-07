@@ -179,17 +179,17 @@ function create_graph(ev) {
         bbwaa.push(player_data.get('bbwaa'));
     }
 
-    graph_points('cumulative', cumulative, "Cumulative BOOG");
+    graph_points('cumulative', cumulative, "Cumulative BOOG", "BOOG Score");
     svg_to_image('cumulative');
-    graph_points('age', by_age, "BOOG By Age");
+    graph_points('age', by_age, "BOOG By Age", "BOOG Score");
     svg_to_image('age');
-    graph_points('hof', hof, "Hall of Fame Chances By Age");
+    graph_points('hof', hof, "Hall of Fame Chances By Age", "Probability", true);
     svg_to_image('hof');
-    graph_points('bbwaa', bbwaa, "BBWAA Induction Chances By Age");
+    graph_points('bbwaa', bbwaa, "BBWAA Induction Chances By Age", "Probability", true);
     svg_to_image('bbwaa');
 }
 
-function graph_points(element_id, seasons, title) {
+function graph_points(element_id, seasons, title, y_label_text, y_percentage = false) {
     const graph_dimensions = {
         height: 500,
         width: 800,
@@ -236,7 +236,7 @@ function graph_points(element_id, seasons, title) {
         .attr('y', '50%')
         .attr('transform', `rotate(-90 ${graph_dimensions.margin} ${x_label_y / 2 - graph_dimensions.margin})`)
         .style('text-anchor', 'middle')
-        .text((d) => "BOOG Score")
+        .text((d) => y_label_text)
         ;
 
     // Create the graph.
@@ -259,10 +259,16 @@ function graph_points(element_id, seasons, title) {
         .domain(d3.extent(boog_extents))
         .range([graph_dimensions.height, 0])
         .nice();
+    let y_axis = d3.axisLeft(y)
+        .tickSize(-graph_dimensions.width);
+    // If the y-axis uses percentages then format them to a pretty xx% rather
+    // than keeping them in the range of [0, 1].
+    if (y_percentage) {
+        y_axis = y_axis.tickFormat(d3.format(".0%"));
+    }
     graph.append('g')
         .attr('class', 'grid')
-        .call(d3.axisLeft(y)
-            .tickSize(-graph_dimensions.width));
+        .call(y_axis);
 
     const color = d3.scaleOrdinal(d3.schemeTableau10);
     const line = d3.line()
