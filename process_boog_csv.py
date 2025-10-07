@@ -5,6 +5,12 @@ import csv
 import json
 
 
+# Map str input into either float if there's any data or a None when it's an
+# empty string.
+def float_or_none(data):
+    if data:
+        return float(data)
+
 def process_boog(boog_csv):
     boog = {}
     with open(boog_csv) as boog_input:
@@ -13,24 +19,16 @@ def process_boog(boog_csv):
             if row['name'] not in boog:
                 boog[row['name']] = []
             player = boog[row['name']]
-            season_boog = None
-            career_boog = None
-            hof_rate = None
-            bbwaa_rate = None
-            if row['season_BOOG']:
-                season_boog = float(row['season_BOOG'])
-            if row['career_to_date_BOOG']:
-                career_boog = float(row['career_to_date_BOOG'])
-            if row['hof_rate']:
-                hof_rate = float(row['hof_rate'])
-            if row['bbwaa_rate']:
-                bbwaa_rate = float(row['bbwaa_rate'])
+            season_boog = float_or_none(row['season_BOOG'])
+            career_boog = float_or_none(row['career_to_date_BOOG'])
+            hof_rate = float_or_none(row['hof_rate'])
+            bbwaa_rate = float_or_none(row['bbwaa_rate'])
             cleaned_row = [
                 int(row['age']),
                 season_boog,
                 career_boog,
                 hof_rate,
-                bbwaa_rate
+                bbwaa_rate,
             ]
             player.append(cleaned_row)
     return boog
