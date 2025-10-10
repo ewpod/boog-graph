@@ -246,13 +246,14 @@ function graph_points(element_id, seasons, title, y_label_text, y_percentage = f
         ;
 
     const age_extents = seasons.flatMap((season) => d3.extent(season, d => d[0]));
-    const x = d3.scaleLinear()
+    const x_axis = d3.scaleLinear()
         .domain(d3.extent(age_extents))
-        .range([0, graph_dimensions.width]);
+        .range([0, graph_dimensions.width])
         ;
+    const x_ticks = x_axis.ticks().filter(Number.isInteger);
     graph.append('g')
         .attr('transform', `translate(0, ${graph_dimensions.height})`)
-        .call(d3.axisBottom(x));
+        .call(d3.axisBottom(x_axis).tickValues(x_ticks).tickFormat(d3.format("d")));
 
     const boog_extents = seasons.flatMap((season) => d3.extent(season, d => d[1]));
     const y = d3.scaleLinear()
@@ -284,7 +285,7 @@ function graph_points(element_id, seasons, title, y_label_text, y_percentage = f
 
     const color = d3.scaleOrdinal(d3.schemeTableau10);
     const line = d3.line()
-        .x((d) => x(d[0]))
+        .x((d) => x_axis(d[0]))
         .y((d) => y(d[1]));
     graph.append('g')
         .attr('stroke-width', 2.5)
