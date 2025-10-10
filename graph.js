@@ -259,13 +259,25 @@ function graph_points(element_id, seasons, title, y_label_text, y_percentage = f
         .domain(d3.extent(boog_extents))
         .range([graph_dimensions.height, 0])
         .nice();
-    let y_axis = d3.axisLeft(y)
-        .tickSize(-graph_dimensions.width);
+    let y_axis_formatter = (x) => x;
     // If the y-axis uses percentages then format them to a pretty xx% rather
     // than keeping them in the range of [0, 1].
     if (y_percentage) {
-        y_axis = y_axis.tickFormat(d3.format(".0%"));
+        const y_ticks = y.ticks();
+        const max_tick = y_ticks[y_ticks.length - 1] * 100;
+        // If the last tick, the largest, is greater than the total number of
+        // ticks, then use only integer labels. Otherwise include on decimal
+        // digit.
+        if (max_tick > y_ticks.length) {
+            y_axis_formatter = d3.format(".0%");
+        }
+        else {
+            y_axis_formatter = d3.format(".1%");
+        }
     }
+    const y_axis = d3.axisLeft(y)
+        .tickSize(-graph_dimensions.width)
+        .tickFormat(y_axis_formatter);
     graph.append('g')
         .attr('class', 'grid')
         .call(y_axis);
