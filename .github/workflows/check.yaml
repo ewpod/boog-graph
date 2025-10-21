@@ -1,0 +1,22 @@
+
+---
+name: Check processing BOOG Graphs
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Process BOOG data
+        run: |
+          ./process_boog_csv.py --output boog.json boog-progression.csv
