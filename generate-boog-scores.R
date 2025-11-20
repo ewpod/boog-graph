@@ -23,7 +23,7 @@ print("Loading seasonal data...")
 
 pitching_data <- read_csv("data/pitcher-season-values.csv") |> 
     mutate(HBP = replace_na(HBP, 0), BF = if_else(is.na(TBF), 3 * round(IP) + H + BB + HBP, TBF)) |>
-    select(League, Name, Season, Team, Age, PlayerId, MLBAMID, WAR, BF) |>
+    select(League, Name, Season, Team, Age, PlayerId, MLBAMID, WAR, BF, IP) |>
     left_join(chadwick_names, by = join_by(PlayerId == key_fangraphs), na_matches = "never") |>
     left_join(chadwick_names, by = join_by(MLBAMID == key_mlbam), na_matches = "never") |>
     mutate(key_person = if_else(is.na(key_person.x), key_person.y, key_person.x)) |>
@@ -31,7 +31,7 @@ pitching_data <- read_csv("data/pitcher-season-values.csv") |>
     rename(league = League, season = Season, team = Team, age = Age, fangraphs_id = PlayerId, mlbam_id = MLBAMID) |>
     select(!Name) |>
     select(!key_bbref.x:name.y) |>
-    mutate(WAA = WAR - (BF * (sum(WAR) / sum(BF))), .by = c(league, season)) |>
+    mutate(WAA = WAR - (round(IP) * (sum(WAR) / sum(round(IP)))), .by = c(league, season)) |>
     select(!league) |> select(!WAR) |>
     relocate(name) |>
     mutate(pitching = 1)
