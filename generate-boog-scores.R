@@ -177,41 +177,71 @@ hof_pace <- bind_rows(median_hof, median_bbwaa, marginal_rows) |> mutate(hof_rat
 
 print("Calculating logistic regressions...")
 
-logit_young <- boog_seasons |> filter(career_to_date_BOOG > 0 & age <= 21 & season >= 1950 & max_season <= (curr_season - 15)) |> 
-    select(pitcher, hof, bbwaa, career_to_date_BOOG)
+logit_young_batter <- boog_seasons |> filter(career_to_date_BOOG > 0 & age <= 21 & min(season) >= 1901 & max_season <= (curr_season - 15) & pitcher == 0, .by = key_person) |> 
+    select(hof, bbwaa, career_to_date_BOOG)
 
-logit_final <- boog_seasons |> filter(career_to_date_BOOG > 0 & season == max_season & season >= 1950 & max_season <= (curr_season - 15)) |>
-    select(pitcher, hof, bbwaa, career_to_date_BOOG)
+logit_final_batter <- boog_seasons |> filter(career_to_date_BOOG > 0 & season == max_season & min(season) >= 1901 & max_season <= (curr_season - 15) & pitcher == 0, .by = key_person) |>
+    select(hof, bbwaa, career_to_date_BOOG)
 
-logit_young$pitcher <- as.factor(logit_young$pitcher)
-logit_final$pitcher <- as.factor(logit_final$pitcher)
+logit_young_pitcher <- boog_seasons |> filter(career_to_date_BOOG > 0 & age <= 21 & min(season) >= 1901 & max_season <= (curr_season - 15) & pitcher == 1, .by = key_person) |> 
+    select(hof, bbwaa, career_to_date_BOOG)
 
-young_row_ct <- nrow(logit_young)
-young_split_idx <- round(young_row_ct * 0.9)
-young_rows <- sample(young_row_ct)
-logit_young <- logit_young[young_rows, ]
-train_young <- logit_young[1:young_split_idx, ]
-test_young <- logit_young[(young_split_idx+1):nrow(logit_young), ]
+logit_final_pitcher <- boog_seasons |> filter(career_to_date_BOOG > 0 & season == max_season & min(season) >= 1901 & max_season <= (curr_season - 15) & pitcher == 1, .by = key_person) |>
+    select(hof, bbwaa, career_to_date_BOOG)
 
-final_row_ct <- nrow(logit_final)
-final_split_idx <- round(final_row_ct * 0.9)
-final_rows <- sample(final_row_ct)
-logit_final <- logit_final[final_rows, ]
-train_final <- logit_final[1:final_split_idx, ]
-test_final <- logit_final[(final_split_idx + 1):nrow(logit_final), ]
+young_batter_row_ct <- nrow(logit_young_batter)
+young_batter_split_idx <- round(young_batter_row_ct * 0.9)
+young_batter_rows <- sample(young_batter_row_ct)
+logit_young_batter <- logit_young_batter[young_batter_rows, ]
+train_young_batter <- logit_young_batter[1:young_batter_split_idx, ]
+test_young_batter <- logit_young_batter[(young_batter_split_idx+1):nrow(logit_young_batter), ]
 
-hof_young_model <- glm(hof ~., family = binomial(link = "logit"), data = (train_young |> select(!bbwaa)))
-bbwaa_young_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (train_young |> select(!hof)))
-hof_final_model <- glm(hof ~., family = binomial(link = "logit"), data = (train_final |> select(!bbwaa)))
-bbwaa_final_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (train_final |> select(!hof)))
+final_batter_row_ct <- nrow(logit_final_batter)
+final_batter_split_idx <- round(final_batter_row_ct * 0.9)
+final_batter_rows <- sample(final_batter_row_ct)
+logit_final_batter <- logit_final_batter[final_batter_rows, ]
+train_final_batter <- logit_final_batter[1:final_batter_split_idx, ]
+test_final_batter <- logit_final_batter[(final_batter_split_idx + 1):nrow(logit_final_batter), ]
+
+young_pitcher_row_ct <- nrow(logit_young_pitcher)
+young_pitcher_split_idx <- round(young_pitcher_row_ct * 0.9)
+young_pitcher_rows <- sample(young_pitcher_row_ct)
+logit_young_pitcher <- logit_young_pitcher[young_pitcher_rows, ]
+train_young_pitcher <- logit_young_pitcher[1:young_pitcher_split_idx, ]
+test_young_pitcher <- logit_young_pitcher[(young_pitcher_split_idx+1):nrow(logit_young_pitcher), ]
+
+final_pitcher_row_ct <- nrow(logit_final_pitcher)
+final_pitcher_split_idx <- round(final_pitcher_row_ct * 0.9)
+final_pitcher_rows <- sample(final_pitcher_row_ct)
+logit_final_pitcher <- logit_final_pitcher[final_pitcher_rows, ]
+train_final_pitcher <- logit_final_pitcher[1:final_pitcher_split_idx, ]
+test_final_pitcher <- logit_final_pitcher[(final_pitcher_split_idx + 1):nrow(logit_final_pitcher), ]
+
+hof_young_batter_model <- glm(hof ~., family = binomial(link = "logit"), data = (train_young_batter |> select(!bbwaa)))
+bbwaa_young_batter_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (train_young_batter |> select(!hof)))
+hof_final_batter_model <- glm(hof ~., family = binomial(link = "logit"), data = (train_final_batter |> select(!bbwaa)))
+bbwaa_final_batter_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (train_final_batter |> select(!hof)))
+
+hof_young_pitcher_model <- glm(hof ~., family = binomial(link = "logit"), data = (train_young_pitcher |> select(!bbwaa)))
+bbwaa_young_pitcher_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (train_young_pitcher |> select(!hof)))
+hof_final_pitcher_model <- glm(hof ~., family = binomial(link = "logit"), data = (train_final_pitcher |> select(!bbwaa)))
+bbwaa_final_pitcher_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (train_final_pitcher |> select(!hof)))
 
 boog_seasons <- boog_seasons |> mutate(
-    hof_in_progress_rate = predict(hof_young_model, newdata = (boog_seasons |> select(pitcher, age, career_to_date_BOOG) |> mutate(pitcher = relevel(as.factor(pitcher), 1, 0))), type="response"),
-    bbwaa_in_progress_rate = predict(bbwaa_young_model, newdata = (boog_seasons |> select(pitcher, age, career_to_date_BOOG) |> mutate(pitcher = relevel(as.factor(pitcher), 1, 0))), type="response"),
-    hof_final_rate = predict(hof_final_model, newdata = (boog_seasons |> select(pitcher, career_to_date_BOOG) |> mutate(pitcher = relevel(as.factor(pitcher), 1, 0))), type="response"),
-    bbwaa_final_rate = predict(bbwaa_final_model, newdata = (boog_seasons |> select(pitcher, career_to_date_BOOG) |> mutate(pitcher = relevel(as.factor(pitcher), 1, 0))), type="response"),
+    hof_in_progress_rate = if_else(pitcher == 0,
+        predict(hof_young_batter_model, newdata = (boog_seasons |> select(age, career_to_date_BOOG)), type="response"),
+        predict(hof_young_pitcher_model, newdata = (boog_seasons |> select(age, career_to_date_BOOG)), type="response")),
+    bbwaa_in_progress_rate = if_else(pitcher == 0,
+        predict(bbwaa_young_batter_model, newdata = (boog_seasons |> select(age, career_to_date_BOOG)), type="response"),
+        predict(bbwaa_young_pitcher_model, newdata = (boog_seasons |> select(age, career_to_date_BOOG)), type="response")),
+    hof_final_rate = if_else(pitcher == 0,
+        predict(hof_final_batter_model, newdata = (boog_seasons |> select(career_to_date_BOOG)), type="response"),
+        predict(hof_final_pitcher_model, newdata = (boog_seasons |> select(career_to_date_BOOG)), type="response")),
+    bbwaa_final_rate = if_else(pitcher == 0,
+        predict(bbwaa_final_batter_model, newdata = (boog_seasons |> select(career_to_date_BOOG)), type="response"),
+        predict(bbwaa_final_pitcher_model, newdata = (boog_seasons |> select(career_to_date_BOOG)), type="response")),
     hof_rate = case_when(
-        age > 37 ~ hof_final_rate,
+        age > 36 ~ hof_final_rate,
         age > 21 ~ hof_rate,
         career_to_date_BOOG == 0 ~ 0,
         (season == max_season & active == 0) ~ hof_final_rate,
@@ -219,7 +249,7 @@ boog_seasons <- boog_seasons |> mutate(
         .default = hof_final_rate
     ),
     bbwaa_rate = case_when(
-        age > 37 ~ bbwaa_final_rate,
+        age > 36 ~ bbwaa_final_rate,
         age > 21 ~ bbwaa_rate,
         career_to_date_BOOG == 0 ~ 0,
         (season == max_season & active == 0) ~ bbwaa_final_rate,
@@ -229,19 +259,27 @@ boog_seasons <- boog_seasons |> mutate(
 )
 
 hof_pace <- hof_pace |> mutate(
-    hof_in_progress_rate = predict(hof_young_model, newdata = (hof_pace |> select(pitcher, age, career_to_date_BOOG) |> mutate(pitcher = relevel(as.factor(pitcher), 1, 0))), type="response"),
-    bbwaa_in_progress_rate = predict(bbwaa_young_model, newdata = (hof_pace |> select(pitcher, age, career_to_date_BOOG) |> mutate(pitcher = relevel(as.factor(pitcher), 1, 0))), type="response"),
-    hof_final_rate = predict(hof_final_model, newdata = (hof_pace |> select(pitcher, career_to_date_BOOG) |> mutate(pitcher = relevel(as.factor(pitcher), 1, 0))), type="response"),
-    bbwaa_final_rate = predict(bbwaa_final_model, newdata = (hof_pace |> select(pitcher, career_to_date_BOOG) |> mutate(pitcher = relevel(as.factor(pitcher), 1, 0))), type="response"),
+    hof_in_progress_rate = if_else(pitcher == 0,
+        predict(hof_young_batter_model, newdata = (hof_pace |> select(age, career_to_date_BOOG)), type="response"),
+        predict(hof_young_pitcher_model, newdata = (hof_pace |> select(age, career_to_date_BOOG)), type="response")),
+    bbwaa_in_progress_rate = if_else(pitcher == 0,
+        predict(bbwaa_young_batter_model, newdata = (hof_pace |> select(age, career_to_date_BOOG)), type="response"),
+        predict(bbwaa_young_pitcher_model, newdata = (hof_pace |> select(age, career_to_date_BOOG)), type="response")),
+    hof_final_rate = if_else(pitcher == 0,
+        predict(hof_final_batter_model, newdata = (hof_pace |> select(career_to_date_BOOG)), type="response"),
+        predict(hof_final_pitcher_model, newdata = (hof_pace |> select(career_to_date_BOOG)), type="response")),
+    bbwaa_final_rate = if_else(pitcher == 0,
+        predict(bbwaa_final_batter_model, newdata = (hof_pace |> select(career_to_date_BOOG)), type="response"),
+        predict(bbwaa_final_pitcher_model, newdata = (hof_pace |> select(career_to_date_BOOG)), type="response")),
     hof_rate = case_when(
-        age > 37 ~ hof_final_rate,
+        age > 36 ~ hof_final_rate,
         age > 21 ~ hof_rate,
         career_to_date_BOOG == 0 ~ 0,
         hof_in_progress_rate > hof_final_rate ~ hof_in_progress_rate,
         .default = hof_final_rate
     ),
     bbwaa_rate = case_when(
-        age > 37 ~ bbwaa_final_rate,
+        age > 36 ~ bbwaa_final_rate,
         age > 21 ~ bbwaa_rate,
         career_to_date_BOOG == 0 ~ 0,
         bbwaa_in_progress_rate > bbwaa_final_rate ~ bbwaa_in_progress_rate,
@@ -249,25 +287,40 @@ hof_pace <- hof_pace |> mutate(
     )
 )
 
-for (curr_age in 22:37) {
-    logit <- boog_seasons |> filter(career_to_date_BOOG > 0 & age == curr_age & season >= 1950 & max_season <= (curr_season - 15)) |>
-    select(pitcher, hof, bbwaa, career_to_date_BOOG)
+for (curr_age in 22:36) {
+    logit_batter <- boog_seasons |> filter(career_to_date_BOOG > 0 & age == curr_age & min(season) >= 1949 & max_season <= (curr_season - 15) & pitcher == 0, .by = key_person) |>
+    select(hof, bbwaa, career_to_date_BOOG)
 
-    logit$pitcher <- as.factor(logit$pitcher)
+    batter_row_ct <- nrow(logit_batter)
+    batter_split_idx <- round(batter_row_ct * 0.9)
+    batter_rows <- sample(batter_row_ct)
+    logit_batter <- logit_batter[batter_rows , ]
+    train_batter <- logit_batter[1:batter_split_idx, ]
+    test_batter <- logit_batter[(batter_split_idx + 1):nrow(logit_batter), ]
 
-    row_ct <- nrow(logit)
-    split_idx <- round(row_ct * 0.9)
-    rows <- sample(row_ct)
-    logit <- logit[rows , ]
-    train <- logit[1:split_idx, ]
-    test <- logit[(split_idx + 1):nrow(logit), ]
+    hof_batter_model <- glm(hof ~., family = binomial(link = "logit"), data = (train_batter |> select(!bbwaa)))
+    bbwaa_batter_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (train_batter |> select(!hof)))
 
-    hof_model <- glm(hof ~., family = binomial(link = "logit"), data = (train |> select(!bbwaa)))
-    bbwaa_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (train |> select(!hof)))
+    logit_pitcher <- boog_seasons |> filter(career_to_date_BOOG > 0 & age == curr_age & min(season) >= 1949 & max_season <= (curr_season - 15) & pitcher == 0, .by = key_person) |>
+    select(hof, bbwaa, career_to_date_BOOG)
+
+    pitcher_row_ct <- nrow(logit_pitcher)
+    pitcher_split_idx <- round(pitcher_row_ct * 0.9)
+    pitcher_rows <- sample(pitcher_row_ct)
+    logit_pitcher <- logit_pitcher[pitcher_rows , ]
+    train_pitcher <- logit_pitcher[1:pitcher_split_idx, ]
+    test_pitcher <- logit_pitcher[(pitcher_split_idx + 1):nrow(logit_pitcher), ]
+
+    hof_pitcher_model <- glm(hof ~., family = binomial(link = "logit"), data = (train_pitcher |> select(!bbwaa)))
+    bbwaa_pitcher_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (train_pitcher |> select(!hof)))
 
     boog_seasons <- boog_seasons |> mutate(
-        hof_in_progress_rate = predict(hof_model, newdata = (boog_seasons |> select(pitcher, career_to_date_BOOG) |> mutate(pitcher = relevel(as.factor(pitcher), 1, 0))), type="response"),
-        bbwaa_in_progress_rate = predict(bbwaa_model, newdata = (boog_seasons |> select(pitcher, career_to_date_BOOG) |> mutate(pitcher = relevel(as.factor(pitcher), 1, 0))), type="response"),
+        hof_in_progress_rate = if_else(age != curr_age, hof_in_progress_rate, if_else(pitcher == 0,
+            predict(hof_batter_model, newdata = (boog_seasons |> select(career_to_date_BOOG)), type="response"),
+            predict(hof_pitcher_model, newdata = (boog_seasons |> select(career_to_date_BOOG)), type="response"))),
+        bbwaa_in_progress_rate = if_else(age != curr_age, bbwaa_in_progress_rate, if_else(pitcher == 0,
+            predict(bbwaa_batter_model, newdata = (boog_seasons |> select(career_to_date_BOOG)), type="response"),
+            predict(bbwaa_pitcher_model, newdata = (boog_seasons |> select(career_to_date_BOOG)), type="response"))),
         hof_rate = case_when(
             age != curr_age ~ hof_rate,
             career_to_date_BOOG == 0 ~ 0,
@@ -285,8 +338,12 @@ for (curr_age in 22:37) {
     )
 
     hof_pace <- hof_pace |> mutate(
-        hof_in_progress_rate = predict(hof_model, newdata = (hof_pace |> select(pitcher, career_to_date_BOOG) |> mutate(pitcher = relevel(as.factor(pitcher), 1, 0))), type="response"),
-        bbwaa_in_progress_rate = predict(bbwaa_model, newdata = (hof_pace |> select(pitcher, career_to_date_BOOG) |> mutate(pitcher = relevel(as.factor(pitcher), 1, 0))), type="response"),
+        hof_in_progress_rate = if_else(age != curr_age, hof_in_progress_rate, if_else(pitcher == 0,
+            predict(hof_batter_model, newdata = (hof_pace |> select(career_to_date_BOOG)), type="response"),
+            predict(hof_pitcher_model, newdata = (hof_pace |> select(career_to_date_BOOG)), type="response"))),
+        bbwaa_in_progress_rate = if_else(age != curr_age, bbwaa_in_progress_rate, if_else(pitcher == 0,
+            predict(bbwaa_batter_model, newdata = (hof_pace |> select(career_to_date_BOOG)), type="response"),
+            predict(bbwaa_pitcher_model, newdata = (hof_pace |> select(career_to_date_BOOG)), type="response"))),
         hof_rate = case_when(
             age != curr_age ~ hof_rate,
             career_to_date_BOOG == 0 ~ 0,
@@ -332,6 +389,7 @@ active_boog_scores <- boog_seasons |> filter(active == 1) |>
     ungroup() |>
     filter(season == curr_season) |>
     select(!key_person) |> select(!season) |> select(!hof:career_to_date_BOOG) |> select(!hof_in_progress_rate:bbwaa_final_rate) |>
-    relocate(name) |> relocate(pitcher, .after = age)
+    relocate(name) |> relocate(pitcher, .after = age) |>
+    arrange(desc(career_BOOG))
 
 write_csv(active_boog_scores, "output/active-player-boogs.csv")
