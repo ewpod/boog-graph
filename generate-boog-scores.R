@@ -69,7 +69,8 @@ boog_seasons <- combined_data |>
         batters_faced = if_else(pitching == 1, sum(BF), NA),
         plate_appearances = if_else(pitching == 0, sum(PA), NA),
         .by = c(key_person, pitching)
-    ) |> group_by(key_person) |>
+    ) |> 
+    group_by(key_person) |>
     fill(batters_faced, plate_appearances, .direction = "downup") |>
     ungroup() |>
     mutate(
@@ -189,43 +190,15 @@ logit_young_pitcher <- boog_seasons |> filter(career_to_date_BOOG > 0 & age <= 2
 logit_final_pitcher <- boog_seasons |> filter(career_to_date_BOOG > 0 & season == max_season & min(season) >= 1901 & max_season <= (curr_season - 15) & pitcher == 1, .by = key_person) |>
     select(hof, bbwaa, career_to_date_BOOG)
 
-young_batter_row_ct <- nrow(logit_young_batter)
-young_batter_split_idx <- round(young_batter_row_ct * 0.9)
-young_batter_rows <- sample(young_batter_row_ct)
-logit_young_batter <- logit_young_batter[young_batter_rows, ]
-train_young_batter <- logit_young_batter[1:young_batter_split_idx, ]
-test_young_batter <- logit_young_batter[(young_batter_split_idx+1):nrow(logit_young_batter), ]
+hof_young_batter_model <- glm(hof ~., family = binomial(link = "logit"), data = (logit_young_batter |> select(!bbwaa)))
+bbwaa_young_batter_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (logit_young_batter |> select(!hof)))
+hof_final_batter_model <- glm(hof ~., family = binomial(link = "logit"), data = (logit_final_batter |> select(!bbwaa)))
+bbwaa_final_batter_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (logit_final_batter |> select(!hof)))
 
-final_batter_row_ct <- nrow(logit_final_batter)
-final_batter_split_idx <- round(final_batter_row_ct * 0.9)
-final_batter_rows <- sample(final_batter_row_ct)
-logit_final_batter <- logit_final_batter[final_batter_rows, ]
-train_final_batter <- logit_final_batter[1:final_batter_split_idx, ]
-test_final_batter <- logit_final_batter[(final_batter_split_idx + 1):nrow(logit_final_batter), ]
-
-young_pitcher_row_ct <- nrow(logit_young_pitcher)
-young_pitcher_split_idx <- round(young_pitcher_row_ct * 0.9)
-young_pitcher_rows <- sample(young_pitcher_row_ct)
-logit_young_pitcher <- logit_young_pitcher[young_pitcher_rows, ]
-train_young_pitcher <- logit_young_pitcher[1:young_pitcher_split_idx, ]
-test_young_pitcher <- logit_young_pitcher[(young_pitcher_split_idx+1):nrow(logit_young_pitcher), ]
-
-final_pitcher_row_ct <- nrow(logit_final_pitcher)
-final_pitcher_split_idx <- round(final_pitcher_row_ct * 0.9)
-final_pitcher_rows <- sample(final_pitcher_row_ct)
-logit_final_pitcher <- logit_final_pitcher[final_pitcher_rows, ]
-train_final_pitcher <- logit_final_pitcher[1:final_pitcher_split_idx, ]
-test_final_pitcher <- logit_final_pitcher[(final_pitcher_split_idx + 1):nrow(logit_final_pitcher), ]
-
-hof_young_batter_model <- glm(hof ~., family = binomial(link = "logit"), data = (train_young_batter |> select(!bbwaa)))
-bbwaa_young_batter_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (train_young_batter |> select(!hof)))
-hof_final_batter_model <- glm(hof ~., family = binomial(link = "logit"), data = (train_final_batter |> select(!bbwaa)))
-bbwaa_final_batter_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (train_final_batter |> select(!hof)))
-
-hof_young_pitcher_model <- glm(hof ~., family = binomial(link = "logit"), data = (train_young_pitcher |> select(!bbwaa)))
-bbwaa_young_pitcher_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (train_young_pitcher |> select(!hof)))
-hof_final_pitcher_model <- glm(hof ~., family = binomial(link = "logit"), data = (train_final_pitcher |> select(!bbwaa)))
-bbwaa_final_pitcher_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (train_final_pitcher |> select(!hof)))
+hof_young_pitcher_model <- glm(hof ~., family = binomial(link = "logit"), data = (logit_young_pitcher |> select(!bbwaa)))
+bbwaa_young_pitcher_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (logit_young_pitcher |> select(!hof)))
+hof_final_pitcher_model <- glm(hof ~., family = binomial(link = "logit"), data = (logit_final_pitcher |> select(!bbwaa)))
+bbwaa_final_pitcher_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (logit_final_pitcher |> select(!hof)))
 
 boog_seasons <- boog_seasons |> mutate(
     hof_in_progress_rate = if_else(pitcher == 0,
@@ -288,31 +261,16 @@ hof_pace <- hof_pace |> mutate(
 )
 
 for (curr_age in 22:36) {
-    logit_batter <- boog_seasons |> filter(career_to_date_BOOG > 0 & age == curr_age & min(season) >= 1949 & max_season <= (curr_season - 15) & pitcher == 0, .by = key_person) |>
+    logit_batter <- boog_seasons |> filter(career_to_date_BOOG > 0 & age == curr_age & min(season) >= 1901 & max_season <= (curr_season - 15) & pitcher == 0, .by = key_person) |>
     select(hof, bbwaa, career_to_date_BOOG)
 
-    batter_row_ct <- nrow(logit_batter)
-    batter_split_idx <- round(batter_row_ct * 0.9)
-    batter_rows <- sample(batter_row_ct)
-    logit_batter <- logit_batter[batter_rows , ]
-    train_batter <- logit_batter[1:batter_split_idx, ]
-    test_batter <- logit_batter[(batter_split_idx + 1):nrow(logit_batter), ]
-
-    hof_batter_model <- glm(hof ~., family = binomial(link = "logit"), data = (train_batter |> select(!bbwaa)))
-    bbwaa_batter_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (train_batter |> select(!hof)))
-
-    logit_pitcher <- boog_seasons |> filter(career_to_date_BOOG > 0 & age == curr_age & min(season) >= 1949 & max_season <= (curr_season - 15) & pitcher == 0, .by = key_person) |>
+    logit_pitcher <- boog_seasons |> filter(career_to_date_BOOG > 0 & age == curr_age & min(season) >= 1901 & max_season <= (curr_season - 15) & pitcher == 0, .by = key_person) |>
     select(hof, bbwaa, career_to_date_BOOG)
 
-    pitcher_row_ct <- nrow(logit_pitcher)
-    pitcher_split_idx <- round(pitcher_row_ct * 0.9)
-    pitcher_rows <- sample(pitcher_row_ct)
-    logit_pitcher <- logit_pitcher[pitcher_rows , ]
-    train_pitcher <- logit_pitcher[1:pitcher_split_idx, ]
-    test_pitcher <- logit_pitcher[(pitcher_split_idx + 1):nrow(logit_pitcher), ]
-
-    hof_pitcher_model <- glm(hof ~., family = binomial(link = "logit"), data = (train_pitcher |> select(!bbwaa)))
-    bbwaa_pitcher_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (train_pitcher |> select(!hof)))
+    hof_batter_model <- glm(hof ~., family = binomial(link = "logit"), data = (logit_batter |> select(!bbwaa)))
+    bbwaa_batter_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (logit_batter |> select(!hof)))
+    hof_pitcher_model <- glm(hof ~., family = binomial(link = "logit"), data = (logit_pitcher |> select(!bbwaa)))
+    bbwaa_pitcher_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (logit_pitcher |> select(!hof)))
 
     boog_seasons <- boog_seasons |> mutate(
         hof_in_progress_rate = if_else(age != curr_age, hof_in_progress_rate, if_else(pitcher == 0,
