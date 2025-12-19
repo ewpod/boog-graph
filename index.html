@@ -31,9 +31,16 @@
         <h1>Better than Other Ordinary Guys Graphs</h1>
         <div class="settings">
             <div id="add-players">
-                <select id="player-list"></select>
+                <div id="show-datalist">
+                    <label for="player-choice">Add players:</label>
+                    <input autocomplete="off" type="search" list="player-list" id="player-choice" name="player-choice" />
+                </div>
+                <div id="show-select" class="hidden">
+                    <select id="player-select"></select>
+                </div>
                 <ul id="chosen-players"></ul>
                 <button id="create" type="button">Create BOOG Graph</button>
+                <datalist id="player-list"></datalist>
             </div>
             <div class="description">
                 <h3>What is BOOG?</h3>
@@ -82,6 +89,10 @@
             <a id="bbwaa-image" class="hidden" href="#">View image</a>
         </div>
         <div>
+            <hr>
+            <h4>Options</h4>
+            <label for="option-use-select">Use select rather than datalist</label>
+            <input type="checkbox" id="option-use-select">
         </div>
         <script src="d3.v7.min.js"></script>
         <script async src="graph.js" type="module"></script>
