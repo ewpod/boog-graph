@@ -1,15 +1,18 @@
+import { Autocomplete } from "./autocomplete.js";
+
 // Map the player's full name to the player information.
 let players = new Map();
 // Map each player's name stripped of diacritics to the full name.
 let PLAYER_NAMES = new Map();
 
+let autocomplete = new Autocomplete('autocomplete-results', 'player-choice', try_add_player_name);
+
 
 function init() {
     fetch('boog.json')
         .then((response) => response.json())
-        .then(load_players);
-
-    init_autocomplete();
+        .then(load_players)
+        .then(setup_events);
 }
 
 function load_players(boog_json) {
@@ -39,7 +42,6 @@ function load_players(boog_json) {
 
     let collator = new Intl.Collator('en');
     all_names.sort(collator.compare);
-    setup_events();
 }
 
 // Strip diacritics and convert to lowercase to make it easy to search.
@@ -54,18 +56,18 @@ function setup_events() {
     if (!name_input) {
         return;
     }
-    name_input.addEventListener('keyup', autocomplete_keys);
+    name_input.addEventListener('keyup', (ev) => autocomplete.keyevents(ev));
     name_input.addEventListener('input', populate_autocomplete);
     name_input.addEventListener('focus', populate_autocomplete);
-    name_input.addEventListener('blur', hide_autocomplete);
+    name_input.addEventListener('blur', () => autocomplete.hide());
     name_input.addEventListener('change', select_player);
 
-    let autocomplete = document.getElementById('autocomplete-results');
-    autocomplete.addEventListener('click', autocomplete_click);
+    let results = document.getElementById('autocomplete-results');
+    results.addEventListener('click', (ev) => autocomplete.click(ev));
     // Cancel event propagation on mousedown for the autocomplete results to
     // cancel firing the blur event from the input losing focus. The click
     // event will fire and do the hiding instead.
-    autocomplete.addEventListener('mousedown', (ev) => ev.preventDefault());
+    results.addEventListener('mousedown', (ev) => ev.preventDefault());
 
     let graph = document.getElementById('create');
     if (!graph) {
@@ -88,92 +90,13 @@ function populate_autocomplete(ev) {
     let element = ev.target;
 
     const name_search = normalize_name(element.value.trim());
-    let result = document.getElementById('autocomplete-results');
     if (name_search.length > 0) {
         let matches = filter_names(name_search);
-        let list = document.createElement('ul');
-        for (const match of matches) {
-            let entry = document.createElement('li');
-            entry.innerText = match;
-            list.appendChild(entry);
-        }
-
-        result.replaceChildren(list);
-        result.classList.remove('hidden');
+        autocomplete.populate(matches);
     }
     else {
-        hide_autocomplete();
+        autocomplete.hide();
     }
-}
-
-function autocomplete_keys(ev) {
-    let target = ev.target;
-    let result = document.getElementById('autocomplete-results');
-    // Sanity check there is a list and if not, reset to nothing.
-    const list = result.firstChild;
-    if (!list) {
-        result.dataset.item = -1;
-        return;
-    }
-
-    if (ev.code === "ArrowUp" || ev.code === "ArrowDown") {
-        ev.preventDefault();
-
-        let item = parseInt(result.dataset.item);
-        let offset = 0;
-        if (ev.code === "ArrowUp") {
-            offset = -1;
-        }
-        else {
-            offset = 1;
-        }
-        item = Math.max(0, Math.min(item + offset, list.childNodes.length - 1));
-        result.dataset.item = item;
-
-        for (let i = 0; i < list.childNodes.length; i++) {
-            let entry = list.childNodes[i];
-            if (i === item) {
-                entry.classList.add("hovered");
-                entry.scrollIntoView({block: "nearest", inline: "nearest"});
-            }
-            else {
-                entry.classList.remove("hovered");
-            }
-        }
-    }
-    else if (ev.code === "Enter") {
-        let item = parseInt(result.dataset.item);
-        if (item >= 0 && item < (list.childNodes.length - 1)) {
-            let entry = list.childNodes[item];
-            const player_name = entry.innerText;
-            if (try_add_player_name(player_name)) {
-                target.value = "";
-                hide_autocomplete();
-            }
-        }
-    }
-}
-
-function autocomplete_click(ev) {
-    const player_name = ev.target.innerText;
-    if (try_add_player_name(player_name)) {
-        let search_form = document.getElementById('player-choice');
-        search_form.value = "";
-        hide_autocomplete();
-    }
-}
-
-function init_autocomplete() {
-    let search_form = document.getElementById('player-choice');
-    let result = document.getElementById('autocomplete-results');
-    result.classList.add('hidden');
-    result.width = search_form.width;
-}
-
-function hide_autocomplete(ev) {
-    let result = document.getElementById('autocomplete-results');
-    result.classList.add('hidden');
-    result.dataset.item = -1;
 }
 
 function select_player(ev) {
@@ -188,7 +111,7 @@ function select_player(ev) {
     // easily adding the next player.
     if (try_add_player_name(player_name)) {
         ev.target.value = "";
-        hide_autocomplete();
+        autocomplete.hide();
     }
 }
 
