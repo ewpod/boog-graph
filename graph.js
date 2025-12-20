@@ -5,6 +5,8 @@ function init() {
     let resp = fetch('boog.json')
         .then((response) => response.json())
         .then(load_players);
+
+    toggle_input_method(undefined);
 }
 
 function load_players(boog_json) {
@@ -43,44 +45,79 @@ function load_datalist_names(names) {
         return;
     }
 
-    let options = [];
-
+    // There need to be distinct elements for each Element, so create separate
+    // list to contain the differences.
+    let list_options = [];
+    // Start with an invalid option to allow selecting the first player.
     let option = document.createElement('option');
     option.value = "";
     option.innerText = "Add players";
-    options.push(option);
+    let select_options = [option];
 
     for (let name of names) {
         let option = document.createElement('option');
         option.value = name;
+        list_options.push(option);
+
+        option = document.createElement('option');
+        option.value = name;
         option.innerText = name;
-        options.push(option);
+        select_options.push(option);
     }
 
-    datalist.replaceChildren(...options);
+    datalist.replaceChildren(...list_options);
+
+    let player_select = document.getElementById('player-select');
+    if (player_select) {
+        player_select.replaceChildren(...select_options);
+    }
 }
 
 function setup_events() {
-    let datalist = document.getElementById('player-list');
+    let datalist = document.getElementById('player-choice');
     if (!datalist) {
         return;
     }
     datalist.addEventListener('change', select_player);
+    datalist.addEventListener('input', select_player);
+
+    let player_select = document.getElementById('player-select');
+    if (player_select) {
+        player_select.addEventListener('change', select_player);
+    }
 
     let graph = document.getElementById('create');
     if (!graph) {
         return;
     }
     graph.addEventListener('click', create_graph);
+
+    let toggle_input = document.getElementById('option-use-select');
+    if (toggle_input) {
+        toggle_input.addEventListener('change', toggle_input_method);
+    }
 }
 
 function select_player(ev) {
-    let player_name = ev.target.value;
+    // For insert events, only check when an autocompleted option is selected.
+    // This does mean typing in the full name will not be considered until
+    // pressing enter or selecting away.
+    if (ev.type === 'input' && ev.inputType != 'insertReplacementText') {
+        return;
+    }
+    let player_name = ev.target.value.trim();
     if (player_name === "" || !players.has(player_name)) {
         return;
     }
 
-    add_player_to_list(player_name);
+    const added = add_player_to_list(player_name);
+    // If a player was successfully added, then clear the input box, but only
+    // clear if it's an input element.
+    if (added) {
+        if (ev.target.type == "search") {
+            ev.target.value = "";
+        }
+    }
 }
 
 function add_player_to_list(player_name) {
@@ -92,7 +129,7 @@ function add_player_to_list(player_name) {
     // Check if the player is already in the list to avoid duplicates.
     for (let node of player_list.childNodes) {
         if (node.dataset && node.dataset.playerName === player_name) {
-            return;
+            return true;
         }
     }
 
@@ -120,6 +157,31 @@ function add_player_to_list(player_name) {
         remove_all.innerText = 'Remove All Players';
         remove_all.addEventListener('click', remove_all_players);
         players_div.appendChild(remove_all);
+    }
+
+    return true;
+}
+
+function toggle_input_method(ev) {
+    let use_select = false;
+    if (ev) {
+        use_select = ev.target.checked;
+    }
+    else {
+        let target = document.getElementById('option-use-select');
+        use_select = target.checked;
+    }
+
+    let show_datalist = document.getElementById('show-datalist');
+    let show_select = document.getElementById('show-select');
+
+    if (use_select) {
+        show_datalist.classList.add('hidden');
+        show_select.classList.remove('hidden');
+    }
+    else {
+        show_datalist.classList.remove('hidden');
+        show_select.classList.add('hidden');
     }
 }
 
