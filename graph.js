@@ -1,12 +1,18 @@
+import { Autocomplete } from "./autocomplete.js";
+
+// Map the player's full name to the player information.
 let players = new Map();
+// Map each player's name stripped of diacritics to the full name.
+let PLAYER_NAMES = new Map();
+
+let autocomplete = new Autocomplete('autocomplete-results', 'player-choice', try_add_player_name);
 
 
 function init() {
-    let resp = fetch('boog.json')
+    fetch('boog.json')
         .then((response) => response.json())
-        .then(load_players);
-
-    toggle_input_method(undefined);
+        .then(load_players)
+        .then(setup_events);
 }
 
 function load_players(boog_json) {
@@ -30,71 +36,66 @@ function load_players(boog_json) {
         player.set('hof', hof);
         player.set('bbwaa', bbwaa);
         players.set(player_name, player);
+
+        PLAYER_NAMES.set(normalize_name(player_name), player_name);
     }
 
     let collator = new Intl.Collator('en');
     all_names.sort(collator.compare);
-    load_datalist_names(all_names);
-    setup_events();
 }
 
-function load_datalist_names(names) {
-    let datalist = document.getElementById('player-list');
-    if (!datalist) {
-        console.log("Couldn't load data-list element");
-        return;
-    }
-
-    // There need to be distinct elements for each Element, so create separate
-    // list to contain the differences.
-    let list_options = [];
-    // Start with an invalid option to allow selecting the first player.
-    let option = document.createElement('option');
-    option.value = "";
-    option.innerText = "Add players";
-    let select_options = [option];
-
-    for (let name of names) {
-        let option = document.createElement('option');
-        option.value = name;
-        list_options.push(option);
-
-        option = document.createElement('option');
-        option.value = name;
-        option.innerText = name;
-        select_options.push(option);
-    }
-
-    datalist.replaceChildren(...list_options);
-
-    let player_select = document.getElementById('player-select');
-    if (player_select) {
-        player_select.replaceChildren(...select_options);
-    }
+// Strip diacritics and convert to lowercase to make it easy to search.
+// Got the normalize + regex replace from https://stackoverflow.com/a/69623589.
+function normalize_name(name) {
+    const no_diacritics = name.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+    return no_diacritics.toLocaleLowerCase();
 }
 
 function setup_events() {
-    let datalist = document.getElementById('player-choice');
-    if (!datalist) {
+    let name_input = document.getElementById('player-choice');
+    if (!name_input) {
         return;
     }
-    datalist.addEventListener('change', select_player);
-    datalist.addEventListener('input', select_player);
+    name_input.addEventListener('keyup', (ev) => autocomplete.keyevents(ev));
+    name_input.addEventListener('input', populate_autocomplete);
+    name_input.addEventListener('focus', populate_autocomplete);
+    name_input.addEventListener('blur', () => autocomplete.hide());
+    name_input.addEventListener('change', select_player);
 
-    let player_select = document.getElementById('player-select');
-    if (player_select) {
-        player_select.addEventListener('change', select_player);
-    }
+    let results = document.getElementById('autocomplete-results');
+    results.addEventListener('click', (ev) => autocomplete.click(ev));
+    // Cancel event propagation on mousedown for the autocomplete results to
+    // cancel firing the blur event from the input losing focus. The click
+    // event will fire and do the hiding instead.
+    results.addEventListener('mousedown', (ev) => ev.preventDefault());
 
     let graph = document.getElementById('create');
     if (!graph) {
         return;
     }
     graph.addEventListener('click', create_graph);
+}
 
-    let toggle_input = document.getElementById('option-use-select');
-    if (toggle_input) {
-        toggle_input.addEventListener('change', toggle_input_method);
+function filter_names(name_search) {
+    let matches = [];
+    for (const name of PLAYER_NAMES.keys()) {
+        if (name.includes(name_search)) {
+            matches.push(PLAYER_NAMES.get(name));
+        }
+    }
+    return matches;
+}
+
+function populate_autocomplete(ev) {
+    let element = ev.target;
+
+    const name_search = normalize_name(element.value.trim());
+    if (name_search.length > 0) {
+        let matches = filter_names(name_search);
+        autocomplete.populate(matches);
+    }
+    else {
+        autocomplete.hide();
     }
 }
 
@@ -106,18 +107,22 @@ function select_player(ev) {
         return;
     }
     let player_name = ev.target.value.trim();
+    // If a player was successfully added, then clear the input box to allow
+    // easily adding the next player.
+    if (try_add_player_name(player_name)) {
+        ev.target.value = "";
+        autocomplete.hide();
+    }
+}
+
+// Try to add this player's name. Function will check validity of name and
+// return a boolean if they were added.
+function try_add_player_name(player_name) {
     if (player_name === "" || !players.has(player_name)) {
-        return;
+        return false;
     }
 
-    const added = add_player_to_list(player_name);
-    // If a player was successfully added, then clear the input box, but only
-    // clear if it's an input element.
-    if (added) {
-        if (ev.target.type == "search") {
-            ev.target.value = "";
-        }
-    }
+    return add_player_to_list(player_name);
 }
 
 function add_player_to_list(player_name) {
@@ -160,29 +165,6 @@ function add_player_to_list(player_name) {
     }
 
     return true;
-}
-
-function toggle_input_method(ev) {
-    let use_select = false;
-    if (ev) {
-        use_select = ev.target.checked;
-    }
-    else {
-        let target = document.getElementById('option-use-select');
-        use_select = target.checked;
-    }
-
-    let show_datalist = document.getElementById('show-datalist');
-    let show_select = document.getElementById('show-select');
-
-    if (use_select) {
-        show_datalist.classList.add('hidden');
-        show_select.classList.remove('hidden');
-    }
-    else {
-        show_datalist.classList.remove('hidden');
-        show_select.classList.add('hidden');
-    }
 }
 
 function remove_all_players(ev) {
