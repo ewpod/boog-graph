@@ -1,4 +1,4 @@
-import { Autocomplete } from "./autocomplete.js";
+import { Autocomplete } from "./autocomplete.mjs";
 
 // Map the player's full name to the player information.
 let players = new Map();
