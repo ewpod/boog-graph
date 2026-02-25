@@ -326,6 +326,7 @@ hof_pace <- hof_pace |> select(!pitcher) |> select(!hof_in_progress_rate:bbwaa_f
 
 spreadsheet_entries <- boog_seasons |> 
     filter(hof | career_BOOG >= 10 | (max_season == 2025 & career_BOOG > 0)) |> 
+    filter(n() > 1, .by = key_person) |>
     select(!hof:max_season) |> select(!career_BOOG) |> select(!season) |> select(!pitcher) |> select(!hof_in_progress_rate:bbwaa_final_rate)
 
 spreadsheet_entries <- bind_rows(spreadsheet_entries, hof_pace |> filter(career_to_date_BOOG > 0))
