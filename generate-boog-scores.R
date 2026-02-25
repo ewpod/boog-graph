@@ -2,6 +2,8 @@
 
 library(tidyverse)
 
+first_season_for_logit <- 1938
+
 print("Loading names and active players...")
 
 chadwick_names <- read_csv("data/all-people.csv") |>
@@ -178,16 +180,16 @@ hof_pace <- bind_rows(median_hof, median_bbwaa, marginal_rows) |> mutate(hof_rat
 
 print("Calculating logistic regressions...")
 
-logit_young_batter <- boog_seasons |> filter(career_to_date_BOOG > 0 & age <= 21 & min(season) >= 1901 & max_season <= (curr_season - 15) & pitcher == 0, .by = key_person) |> 
+logit_young_batter <- boog_seasons |> filter(career_to_date_BOOG > 0 & age <= 21 & min(season) >= first_season_for_logit & (max_season <= (curr_season - 15) | hof) & pitcher == 0, .by = key_person) |> 
     select(hof, bbwaa, career_to_date_BOOG)
 
-logit_final_batter <- boog_seasons |> filter(career_to_date_BOOG > 0 & season == max_season & min(season) >= 1901 & max_season <= (curr_season - 15) & pitcher == 0, .by = key_person) |>
+logit_final_batter <- boog_seasons |> filter(career_to_date_BOOG > 0 & season == max_season & min(season) >= first_season_for_logit & (max_season <= (curr_season - 15) | hof) & pitcher == 0, .by = key_person) |>
     select(hof, bbwaa, career_to_date_BOOG)
 
-logit_young_pitcher <- boog_seasons |> filter(career_to_date_BOOG > 0 & age <= 21 & min(season) >= 1901 & max_season <= (curr_season - 15) & pitcher == 1, .by = key_person) |> 
+logit_young_pitcher <- boog_seasons |> filter(career_to_date_BOOG > 0 & age <= 21 & min(season) >= first_season_for_logit & (max_season <= (curr_season - 15) | hof) & pitcher == 1, .by = key_person) |> 
     select(hof, bbwaa, career_to_date_BOOG)
 
-logit_final_pitcher <- boog_seasons |> filter(career_to_date_BOOG > 0 & season == max_season & min(season) >= 1901 & max_season <= (curr_season - 15) & pitcher == 1, .by = key_person) |>
+logit_final_pitcher <- boog_seasons |> filter(career_to_date_BOOG > 0 & season == max_season & min(season) >= first_season_for_logit & (max_season <= (curr_season - 15) | hof) & pitcher == 1, .by = key_person) |>
     select(hof, bbwaa, career_to_date_BOOG)
 
 hof_young_batter_model <- glm(hof ~., family = binomial(link = "logit"), data = (logit_young_batter |> select(!bbwaa)))
@@ -261,10 +263,10 @@ hof_pace <- hof_pace |> mutate(
 )
 
 for (curr_age in 22:36) {
-    logit_batter <- boog_seasons |> filter(career_to_date_BOOG > 0 & age == curr_age & min(season) >= 1901 & max_season <= (curr_season - 15) & pitcher == 0, .by = key_person) |>
+    logit_batter <- boog_seasons |> filter(career_to_date_BOOG > 0 & age == curr_age & min(season) >= first_season_for_logit & (max_season <= (curr_season - 15) | hof) & pitcher == 0, .by = key_person) |>
     select(hof, bbwaa, career_to_date_BOOG)
 
-    logit_pitcher <- boog_seasons |> filter(career_to_date_BOOG > 0 & age == curr_age & min(season) >= 1901 & max_season <= (curr_season - 15) & pitcher == 0, .by = key_person) |>
+    logit_pitcher <- boog_seasons |> filter(career_to_date_BOOG > 0 & age == curr_age & min(season) >= first_season_for_logit & (max_season <= (curr_season - 15) | hof) & pitcher == 0, .by = key_person) |>
     select(hof, bbwaa, career_to_date_BOOG)
 
     hof_batter_model <- glm(hof ~., family = binomial(link = "logit"), data = (logit_batter |> select(!bbwaa)))
@@ -323,7 +325,7 @@ hof_pace <- hof_pace |> select(!pitcher) |> select(!hof_in_progress_rate:bbwaa_f
 
 
 spreadsheet_entries <- boog_seasons |> 
-    filter(hof | career_BOOG >= 10) |> 
+    filter(hof | career_BOOG >= 10 | (max_season == 2025 & career_BOOG > 0)) |> 
     select(!hof:max_season) |> select(!career_BOOG) |> select(!season) |> select(!pitcher) |> select(!hof_in_progress_rate:bbwaa_final_rate)
 
 spreadsheet_entries <- bind_rows(spreadsheet_entries, hof_pace |> filter(career_to_date_BOOG > 0))
