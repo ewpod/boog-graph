@@ -2,7 +2,7 @@
 
 library(tidyverse)
 
-first_season_for_logit <- 1938
+first_season_for_logit <- 1945
 
 print("Loading names and active players...")
 
@@ -406,7 +406,7 @@ hof_pace <- hof_pace |> select(!pitcher) |> select(!starter) |> select(!hof_in_p
 
 
 spreadsheet_entries <- boog_seasons |> 
-    filter(hof | career_BOOG >= 10 | (max_season == 2025 & career_BOOG >= 0.05)) |>
+    filter(hof | career_BOOG >= 10 | (pitcher == 1 & starter == 0 & career_BOOG >= 5) | (active == 1 & career_BOOG >= 0.05)) |>
     filter(n() > 1, .by = key_person) |>
     select(!hof:max_season) |> select(!career_BOOG) |> select(!season:starter) |> select(!hof_in_progress_rate:bbwaa_final_rate)
 
