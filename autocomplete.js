@@ -68,7 +68,7 @@ class Autocomplete {
             }
         }
         else if (ev.code === "Enter") {
-            if (this.#index >= 0 && this.#index < (list.childNodes.length - 1)) {
+            if (this.#index >= 0 && this.#index <= (list.childNodes.length - 1)) {
                 let entry = list.childNodes[this.#index];
                 const player_name = entry.innerText;
                 if (this.#try_add_player_name(player_name)) {
