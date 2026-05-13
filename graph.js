@@ -246,8 +246,8 @@ function graph_points(element_id, seasons, title, y_label_text, y_percentage = f
     };
 
     const legend_dimensions = {
-        box: 20,
-        box_offset: 30,
+        box: 30,
+        line_height: 25,
     };
 
     // Clear any existing graphs first.
@@ -328,6 +328,11 @@ function graph_points(element_id, seasons, title, y_label_text, y_percentage = f
         .call(y_axis);
 
     const color = d3.scaleOrdinal(d3.schemeTableau10);
+    // Use solid lines for the first run through of the color scheme and then
+    // switch to increasingly dashed lines as the colors repeat.
+    const color_count = d3.schemeTableau10.length;
+    const stroke_width = seasons.map((_item, idx) => (Math.floor(idx / color_count)) * 5);
+    let line_style = d3.scaleOrdinal(stroke_width);
     const line = d3.line()
         .x((d) => x_axis(d[0]))
         .y((d) => y(d[1]));
@@ -339,27 +344,34 @@ function graph_points(element_id, seasons, title, y_label_text, y_percentage = f
         .join('path')
             .attr('d', line)
             .attr('stroke', color)
+            .attr('stroke-dasharray', line_style)
         ;
 
     // Create the legend.
     const names = seasons.flatMap((season) => season[0][2]);
+    const legend_left = graph_dimensions.left + graph_dimensions.width + graph_dimensions.margin;
+    const legend_top = graph_dimensions.top - graph_dimensions.margin;
     var legend_area = svg.append('g')
-        .attr('transform', `translate(${graph_dimensions.left + legend_dimensions.box + graph_dimensions.width}, ${graph_dimensions.top})`);
+        .attr('transform', `translate(${legend_left}, ${legend_top})`);
     var legend = legend_area.selectAll('.legend')
         .data(names)
         .enter()
             .append('g')
             .attr('class', 'legend')
-            .attr('transform', (d, i) => `translate(0, ${i * legend_dimensions.box_offset})`)
+            .attr('transform', (d, i) => `translate(0, ${i * legend_dimensions.line_height})`)
         ;
 
     // TODO: Use same color variable instead of resetting.
     const color_names = d3.scaleOrdinal(d3.schemeTableau10);
-    legend.append('rect')
-        .attr('x', 0)
-        .attr('width', legend_dimensions.box)
-        .attr('height', legend_dimensions.box)
-        .style('fill', color_names)
+    line_style = d3.scaleOrdinal(stroke_width);
+    legend.append('line')
+        .attr('x1', 0)
+        .attr('x2', legend_dimensions.box)
+        .attr('y1', legend_dimensions.box / 2)
+        .attr('y2', legend_dimensions.box / 2)
+        .attr('stroke', color_names)
+        .attr('stroke-width', 6)
+        .attr('stroke-dasharray', line_style)
         ;
 
     legend.append('text')
