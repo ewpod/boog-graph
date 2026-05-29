@@ -77,7 +77,7 @@ function setup_events() {
 }
 
 function filter_names(name_search) {
-    let search_tokens = name_search.split();
+    let search_tokens = name_search.split(" ");
     let matches = [];
     for (const name of PLAYER_NAMES.keys()) {
         if (search_tokens.every((token) => name.includes(token))) {
