@@ -24,11 +24,11 @@ active_players <- bind_rows(active_batters, active_pitchers) |> distinct(key_per
 print("Loading seasonal data...")
 
 starting_pitching_data <- read_csv("data/starting-pitcher-season-values.csv") |> 
-    mutate(HBP = replace_na(HBP, 0), BF = if_else(is.na(TBF), 3 * round(IP) + H + BB + HBP, TBF), starting = 1) |>
+    mutate(HBP = replace_na(HBP, 0), BF = if_else(is.na(TBF), 3 * round(IP) + H + BB + HBP, TBF), starting = 1, WAR = (fWAR + rWAR) / 2) |>
     select(League, Name, Season, Team, Age, PlayerId, MLBAMID, WAR, BF, IP, starting)
 
 relief_pitching_data <- read_csv("data/relief-pitcher-season-values.csv") |>
-    mutate(HBP = replace_na(HBP, 0), BF = if_else(is.na(TBF), 3 * round(IP) + H + BB + HBP, TBF), starting = 0) |>
+    mutate(HBP = replace_na(HBP, 0), BF = if_else(is.na(TBF), 3 * round(IP) + H + BB + HBP, TBF), starting = 0, WAR = (fWAR + rWAR) / 2) |>
     select(League, Name, Season, Team, Age, PlayerId, MLBAMID, WAR, BF, IP, starting)
 
 pitching_data <- bind_rows(starting_pitching_data, relief_pitching_data) |>
@@ -113,7 +113,8 @@ boog_seasons <- combined_data |>
         career_to_date_starter_IP = cumsum(starter_IP),
         career_to_date_reliever_IP = cumsum(reliever_IP),
         career_BOOG = sum(season_BOOG)
-    ) |> ungroup() |> mutate(hof_rate = 0.0, bbwaa_rate = 0.0, starter = if_else(pitcher & career_to_date_starter_IP >= career_to_date_reliever_IP, 1, 0))
+    ) |> ungroup() |> 
+    mutate(hof_rate = 0.0, bbwaa_rate = 0.0, starter = if_else(pitcher & career_to_date_starter_IP >= career_to_date_reliever_IP, 1, 0))
 
 print("Generating HOF data")
 
