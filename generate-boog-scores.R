@@ -44,8 +44,7 @@ pitching_data <- bind_rows(starting_pitching_data, relief_pitching_data) |>
     relocate(name) |>
     mutate(pitching = 1) |>
     summarize(WAA = sum(WAA), BF = sum(BF), IP = sum(IP), .by = c(name, season, age, fangraphs_id, mlbam_id, key_person, pitching, starting)) |>
-    pivot_wider(names_from = starting, names_glue = "WAA_{starting}", values_from = WAA) |>
-    mutate(WAA_start = replace_na(WAA_start, 0), WAA_relief = replace_na(WAA_relief, 0))
+    pivot_wider(names_from = starting, names_glue = "WAA_{starting}", values_from = WAA)
     
 
 batting_data <- read_csv("data/batter-season-values.csv") |> 
@@ -103,13 +102,15 @@ boog_seasons <- combined_data |>
         BOOG_start = case_when(
             pitcher == 0 | !made_starts ~ 0, 
             WAA_start + WAA_bat < 0 ~ 0,
-            .default = WAA_start + WAA_bat),
+            .default = WAA_start + WAA_bat
+        ),
         BOOG_relief = case_when(
             pitcher == 0 ~ 0, 
             made_starts & WAA_relief < 0 ~ 0,
             made_starts ~ WAA_relief,
             WAA_relief + WAA_bat < 0 ~ 0,
-            .default = WAA_relief),
+            .default = WAA_relief
+        ),
     ) |> select(!WAA_bat:WAA_relief) |> select(!made_starts) |>
     group_by(key_person) |>
     mutate(
