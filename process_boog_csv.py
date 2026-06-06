@@ -20,7 +20,7 @@ def process_boog(boog_csv):
                 boog[row['name']] = []
             player = boog[row['name']]
             season_boog = float_or_none(row['season_BOOG'])
-            career_boog = float_or_none(row['career_to_date_BOOG'])
+            career_boog = float_or_none(row['cumsum_BOOG'])
             hof_rate = float_or_none(row['hof_rate'])
             bbwaa_rate = float_or_none(row['bbwaa_rate'])
             cleaned_row = [
