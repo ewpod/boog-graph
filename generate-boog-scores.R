@@ -24,12 +24,12 @@ active_players <- bind_rows(active_batters, active_pitchers) |> distinct(key_per
 print("Loading seasonal data...")
 
 starting_pitching_data <- read_csv("data/starting-pitcher-season-values.csv") |> 
-    mutate(HBP = replace_na(HBP, 0), BF = if_else(is.na(TBF), 3 * round(IP) + H + BB + HBP, TBF), starting = "start", WAR = (fWAR + rWAR) / 2) |>
-    select(League, Name, Season, Team, Age, PlayerId, MLBAMID, WAR, BF, IP, starting)
+    mutate(HBP = replace_na(HBP, 0), BF = if_else(is.na(TBF), 3 * round(IP) + H + BB + HBP, TBF), role = "start", WAR = (fWAR + rWAR) / 2) |>
+    select(League, Name, Season, Team, Age, PlayerId, MLBAMID, WAR, BF, IP, role)
 
 relief_pitching_data <- read_csv("data/relief-pitcher-season-values.csv") |>
-    mutate(HBP = replace_na(HBP, 0), BF = if_else(is.na(TBF), 3 * round(IP) + H + BB + HBP, TBF), starting = "relief", WAR = (fWAR + rWAR) / 2) |>
-    select(League, Name, Season, Team, Age, PlayerId, MLBAMID, WAR, BF, IP, starting)
+    mutate(HBP = replace_na(HBP, 0), BF = if_else(is.na(TBF), 3 * round(IP) + H + BB + HBP, TBF), role = "relief", WAR = (fWAR + rWAR) / 2) |>
+    select(League, Name, Season, Team, Age, PlayerId, MLBAMID, WAR, BF, IP, role)
 
 pitching_data <- bind_rows(starting_pitching_data, relief_pitching_data) |>
     left_join(chadwick_names, by = join_by(PlayerId == key_fangraphs), na_matches = "never") |>
@@ -42,9 +42,8 @@ pitching_data <- bind_rows(starting_pitching_data, relief_pitching_data) |>
     mutate(WAA = WAR - (round(IP) * (sum(WAR) / sum(round(IP)))), .by = c(league, season)) |>
     select(!league) |> select(!WAR) |>
     relocate(name) |>
-    mutate(pitching = 1) |>
-    summarize(WAA = sum(WAA), BF = sum(BF), IP = sum(IP), .by = c(name, season, age, fangraphs_id, mlbam_id, key_person, pitching, starting)) |>
-    pivot_wider(names_from = starting, names_glue = "WAA_{starting}", values_from = WAA)
+    summarize(WAA = sum(WAA), BF = sum(BF), .by = c(name, season, age, fangraphs_id, mlbam_id, key_person, role)) |>
+    pivot_wider(names_from = role, names_glue = "WAA_{role}", values_from = WAA)
     
 
 batting_data <- read_csv("data/batter-season-values.csv") |> 
@@ -57,8 +56,7 @@ batting_data <- read_csv("data/batter-season-values.csv") |>
     rename(season = Season, team = Team, age = Age, fangraphs_id = PlayerId, mlbam_id = MLBAMID) |>
     select(!Name) |>
     select(!key_bbref.x:name.y) |>
-    relocate(name) |>
-    mutate(pitching = 0)
+    relocate(name)
 
 hall_of_famers <- read_csv("data/hall-of-famers.csv") |>
     left_join(chadwick_names, by = join_by(key_bref == key_bbref), na_matches = "never") |>
@@ -68,30 +66,24 @@ hall_of_famers <- read_csv("data/hall-of-famers.csv") |>
 combined_data <- bind_rows(pitching_data, batting_data) |> 
     filter(!is.na(age)) |>
     mutate(key_person = if_else(is.na(key_person), as.character(fangraphs_id), key_person)) |> 
-    select(name, season, age, WAA_bat, WAA_start, WAA_relief, BF, PA, key_person, pitching)
-
-pitcher_lookup <- combined_data |>
-    mutate(PA = replace_na(PA, 0), BF = replace_na(BF, 0)) |>
-    summarize(BF = sum(BF), PA = sum(PA), .by = key_person) |>
-    mutate(pitcher = if_else(BF > PA, 1, 0)) |>
-    select(!BF:PA)
-    
+    select(name, season, age, WAA_bat, WAA_start, WAA_relief, BF, PA, key_person)
 
 curr_season <- max(combined_data$season)
 
 print("Combining data sets and summarizing BOOG scores..")
 
 boog_seasons <- combined_data |>
-    left_join(pitcher_lookup, by = join_by(key_person)) |>
     mutate(
-        made_starts = any(!is.na(WAA_start)),
+        started = any(!is.na(WAA_start)),
+        relieved = any(!is.na(WAA_relief)),
+        BF = sum(BF, na.rm = TRUE),
+        PA = sum(PA, na.rm = TRUE),
         WAA_bat = sum(WAA_bat, na.rm = TRUE),
         WAA_start = sum(WAA_start, na.rm = TRUE),
         WAA_relief = sum(WAA_relief, na.rm = TRUE),
+        season_BOOG = max(WAA_bat + WAA_start + WAA_relief, 0),
         .by = c(key_person, season)
-    ) |> mutate(season_BOOG = max(WAA_bat + WAA_start + WAA_relief, 0), .by = c(key_person, season)) |>
-    filter(sum(season_BOOG) > 0, .by = key_person) |>
-    select(-BF, -PA, -pitching) |>
+    ) |> filter(sum(season_BOOG) > 0, .by = key_person) |>
     slice(1, .by = c(key_person, season)) |> 
     left_join(hall_of_famers, by = join_by(key_person)) |>
     left_join(active_players, by = join_by(key_person)) |>
@@ -99,27 +91,41 @@ boog_seasons <- combined_data |>
         active = replace_na(active, 0), 
         hof = replace_na(hof, 0), 
         bbwaa = replace_na(bbwaa, 0),
+        BOOG_bat = case_when(
+            PA >= BF & WAA_bat > 0 ~ WAA_bat,
+            .default = 0
+        ),
+        BOOG_pitch = case_when(
+            PA >= BF & WAA_start + WAA_relief < 0 ~ 0,
+            PA >= BF ~ WAA_start + WAA_relief,
+            .default = season_BOOG
+        ),
         BOOG_start = case_when(
-            pitcher == 0 | !made_starts ~ 0, 
+            !started ~ 0, 
+            PA >= BF & WAA_start < 0 ~ 0,
+            PA >= BF ~ WAA_start,
             WAA_start + WAA_bat < 0 ~ 0,
             .default = WAA_start + WAA_bat
         ),
         BOOG_relief = case_when(
-            pitcher == 0 ~ 0, 
-            made_starts & WAA_relief < 0 ~ 0,
-            made_starts ~ WAA_relief,
+            !relieved ~ 0,
+            started & WAA_relief < 0 ~ 0,
+            started ~ WAA_relief,
+            PA >= BF & WAA_relief < 0 ~ 0,
+            PA >= BF ~ WAA_relief,
             WAA_relief + WAA_bat < 0 ~ 0,
             .default = WAA_relief + WAA_bat
         ),
-    ) |> select(!WAA_bat:WAA_relief) |> select(!made_starts) |>
+    ) |> select(!WAA_bat:PA) |> select(!started:relieved) |>
     group_by(key_person) |>
     mutate(
         delta = min(season) - min(age), 
-        max_season = if_else(active == 1, curr_season, max(season))
-    ) |>
+        max_season = if_else(active == 1, curr_season, max(season)),
+        pitcher = if_else(sum(BOOG_pitch) > sum(BOOG_bat), 1, 0)
+    ) |> select(!BOOG_bat:BOOG_pitch) |>
     complete(age = full_seq(age, 1)) |>
     arrange(age) |>
-    fill(name, pitcher, hof, bbwaa, active, delta, max_season, .direction = "downup") |>
+    fill(name, hof, bbwaa, active, delta, max_season, pitcher, .direction = "downup") |>
     ungroup() |> 
     mutate(
         season = if_else(is.na(season), age + delta, season)
@@ -135,12 +141,17 @@ boog_seasons <- combined_data |>
         cumsum_BOOG_relief = cumsum(BOOG_relief),
         career_BOOG = sum(season_BOOG),
         .by = key_person
-    ) |> mutate(hof_rate = 0.0, bbwaa_rate = 0.0, starter = if_else(pitcher & cumsum_BOOG_start >= cumsum_BOOG_relief, 1, 0)) |>
+    ) |> mutate(
+        hof_rate = 0.0,
+        bbwaa_rate = 0.0,
+        starter = if_else(pitcher & cumsum_BOOG_start >= cumsum_BOOG_relief, 1, 0)
+    ) |> relocate(pitcher, .after = season) |>
     relocate(starter, .after = pitcher)
 
 print("Generating HOF data")
 
-hof_projection_data <- boog_seasons |>
+hof_projection_data <- boog_seasons |> 
+    mutate(starter = if_else(season != max(season), NA, starter), .by = key_person) |>
     group_by(pitcher) |>
     complete(key_person, age) |>
     group_by(key_person) |>
