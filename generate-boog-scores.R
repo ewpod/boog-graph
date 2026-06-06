@@ -109,7 +109,7 @@ boog_seasons <- combined_data |>
             made_starts & WAA_relief < 0 ~ 0,
             made_starts ~ WAA_relief,
             WAA_relief + WAA_bat < 0 ~ 0,
-            .default = WAA_relief
+            .default = WAA_relief + WAA_bat
         ),
     ) |> select(!WAA_bat:WAA_relief) |> select(!made_starts) |>
     group_by(key_person) |>
