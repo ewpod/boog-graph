@@ -24,11 +24,11 @@ active_players <- bind_rows(active_batters, active_pitchers) |> distinct(key_per
 print("Loading seasonal data...")
 
 starting_pitching_data <- read_csv("data/starting-pitcher-season-values.csv") |> 
-    mutate(HBP = replace_na(HBP, 0), BF = if_else(is.na(TBF), 3 * round(IP) + H + BB + HBP, TBF), starting = 1, WAR = (fWAR + rWAR) / 2) |>
+    mutate(HBP = replace_na(HBP, 0), BF = if_else(is.na(TBF), 3 * round(IP) + H + BB + HBP, TBF), starting = "start", WAR = (fWAR + rWAR) / 2) |>
     select(League, Name, Season, Team, Age, PlayerId, MLBAMID, WAR, BF, IP, starting)
 
 relief_pitching_data <- read_csv("data/relief-pitcher-season-values.csv") |>
-    mutate(HBP = replace_na(HBP, 0), BF = if_else(is.na(TBF), 3 * round(IP) + H + BB + HBP, TBF), starting = 0, WAR = (fWAR + rWAR) / 2) |>
+    mutate(HBP = replace_na(HBP, 0), BF = if_else(is.na(TBF), 3 * round(IP) + H + BB + HBP, TBF), starting = "relief", WAR = (fWAR + rWAR) / 2) |>
     select(League, Name, Season, Team, Age, PlayerId, MLBAMID, WAR, BF, IP, starting)
 
 pitching_data <- bind_rows(starting_pitching_data, relief_pitching_data) |>
@@ -44,12 +44,13 @@ pitching_data <- bind_rows(starting_pitching_data, relief_pitching_data) |>
     relocate(name) |>
     mutate(pitching = 1) |>
     summarize(WAA = sum(WAA), BF = sum(BF), IP = sum(IP), .by = c(name, season, age, fangraphs_id, mlbam_id, key_person, pitching, starting)) |>
-    pivot_wider(names_from = starting, names_glue = "IP{starting}", values_from = IP) |>
-    mutate(IP1 = replace_na(IP1, 0), IP0 = replace_na(IP0, 0))
+    pivot_wider(names_from = starting, names_glue = "WAA_{starting}", values_from = WAA) |>
+    mutate(WAA_start = replace_na(WAA_start, 0), WAA_relief = replace_na(WAA_relief, 0))
     
 
 batting_data <- read_csv("data/batter-season-values.csv") |> 
     select(Name, Season, Team, Age, PlayerId, MLBAMID, WAA, PA) |>
+    rename(WAA_bat = WAA) |>
     left_join(chadwick_names, by = join_by(PlayerId == key_fangraphs), na_matches = "never") |>
     left_join(chadwick_names, by = join_by(MLBAMID == key_mlbam), na_matches = "never") |>
     mutate(key_person = if_else(is.na(key_person.x), key_person.y, key_person.x)) |>
@@ -67,8 +68,8 @@ hall_of_famers <- read_csv("data/hall-of-famers.csv") |>
 
 combined_data <- bind_rows(pitching_data, batting_data) |> 
     filter(!is.na(age)) |>
-    mutate(key_person = if_else(is.na(key_person), as.character(fangraphs_id), key_person)) |>
-    select(name, season, age, WAA, BF, PA, IP1, IP0, key_person, pitching)
+    mutate(key_person = if_else(is.na(key_person), as.character(fangraphs_id), key_person)) |> 
+    select(name, season, age, WAA_bat, WAA_start, WAA_relief, BF, PA, key_person, pitching)
 
 pitcher_lookup <- combined_data |>
     mutate(PA = replace_na(PA, 0), BF = replace_na(BF, 0)) |>
@@ -83,17 +84,34 @@ print("Combining data sets and summarizing BOOG scores..")
 
 boog_seasons <- combined_data |>
     left_join(pitcher_lookup, by = join_by(key_person)) |>
-    mutate(season_BOOG = max(sum(WAA), 0), starter_IP = sum(IP1, na.rm = TRUE), reliever_IP = sum(IP0, na.rm = TRUE), .by = c(key_person, season)) |>
+    mutate(
+        made_starts = any(!is.na(WAA_start)),
+        WAA_bat = sum(WAA_bat, na.rm = TRUE),
+        WAA_start = sum(WAA_start, na.rm = TRUE),
+        WAA_relief = sum(WAA_relief, na.rm = TRUE),
+        .by = c(key_person, season)
+    ) |> mutate(season_BOOG = max(WAA_bat + WAA_start + WAA_relief, 0), .by = c(key_person, season)) |>
     filter(sum(season_BOOG) > 0, .by = key_person) |>
-    select(-WAA, -BF, -PA, -pitching, -IP1, -IP0) |>
+    select(-BF, -PA, -pitching) |>
     slice(1, .by = c(key_person, season)) |> 
     left_join(hall_of_famers, by = join_by(key_person)) |>
     left_join(active_players, by = join_by(key_person)) |>
     mutate(
         active = replace_na(active, 0), 
         hof = replace_na(hof, 0), 
-        bbwaa = replace_na(bbwaa, 0)
-    ) |> group_by(key_person) |>
+        bbwaa = replace_na(bbwaa, 0),
+        BOOG_start = case_when(
+            pitcher == 0 | !made_starts ~ 0, 
+            WAA_start + WAA_bat < 0 ~ 0,
+            .default = WAA_start + WAA_bat),
+        BOOG_relief = case_when(
+            pitcher == 0 ~ 0, 
+            made_starts & WAA_relief < 0 ~ 0,
+            made_starts ~ WAA_relief,
+            WAA_relief + WAA_bat < 0 ~ 0,
+            .default = WAA_relief),
+    ) |> select(!WAA_bat:WAA_relief) |> select(!made_starts) |>
+    group_by(key_person) |>
     mutate(
         delta = min(season) - min(age), 
         max_season = if_else(active == 1, curr_season, max(season))
@@ -101,20 +119,23 @@ boog_seasons <- combined_data |>
     complete(age = full_seq(age, 1)) |>
     arrange(age) |>
     fill(name, pitcher, hof, bbwaa, active, delta, max_season, .direction = "downup") |>
+    ungroup() |> 
     mutate(
-        season = if_else(is.na(season), age + delta, season),
-        season_BOOG = replace_na(season_BOOG, 0),
-        starter_IP = replace_na(starter_IP, 0),
-        reliever_IP = replace_na(reliever_IP, 0)
+        season = if_else(is.na(season), age + delta, season)
     ) |> select(!delta) |>
     arrange(season) |>
     mutate(
-        career_to_date_BOOG = cumsum(season_BOOG),
-        career_to_date_starter_IP = cumsum(starter_IP),
-        career_to_date_reliever_IP = cumsum(reliever_IP),
-        career_BOOG = sum(season_BOOG)
-    ) |> ungroup() |> 
-    mutate(hof_rate = 0.0, bbwaa_rate = 0.0, starter = if_else(pitcher & career_to_date_starter_IP >= career_to_date_reliever_IP, 1, 0))
+        season_BOOG = replace_na(season_BOOG, 0),
+        BOOG_start = replace_na(BOOG_start, 0),
+        BOOG_relief = replace_na(BOOG_relief, 0)
+    ) |> mutate(
+        cumsum_BOOG = cumsum(season_BOOG),
+        cumsum_BOOG_start = cumsum(BOOG_start),
+        cumsum_BOOG_relief = cumsum(BOOG_relief),
+        career_BOOG = sum(season_BOOG),
+        .by = key_person
+    ) |> mutate(hof_rate = 0.0, bbwaa_rate = 0.0, starter = if_else(pitcher & cumsum_BOOG_start >= cumsum_BOOG_relief, 1, 0)) |>
+    relocate(starter, .after = pitcher)
 
 print("Generating HOF data")
 
@@ -123,33 +144,33 @@ hof_projection_data <- boog_seasons |>
     complete(key_person, age) |>
     group_by(key_person) |>
     arrange(age) |>
-    fill(career_to_date_BOOG) |>
+    fill(cumsum_BOOG) |>
     fill(hof, bbwaa, starter, .direction = "downup") |>
     ungroup() |>
-    mutate(season_BOOG = replace_na(season_BOOG, 0), career_to_date_BOOG = replace_na(career_to_date_BOOG, 0))
+    mutate(season_BOOG = replace_na(season_BOOG, 0), cumsum_BOOG = replace_na(cumsum_BOOG, 0))
 
 median_hof_batter <- hof_projection_data |> filter(hof == 1, pitcher == 0) |>
-    summarize(median_season_BOOG = median(season_BOOG), median_career_to_date_BOOG = median(career_to_date_BOOG), .by = c(age, pitcher)) |>
-    filter(median_career_to_date_BOOG > 0) |>
-    rename(season_BOOG = median_season_BOOG, career_to_date_BOOG = median_career_to_date_BOOG) |>
+    summarize(median_season_BOOG = median(season_BOOG), median_cumsum_BOOG = median(cumsum_BOOG), .by = c(age, pitcher)) |>
+    filter(median_cumsum_BOOG > 0) |>
+    rename(season_BOOG = median_season_BOOG, cumsum_BOOG = median_cumsum_BOOG) |>
     mutate(name = "Median HOF Batter", key_person = name, starter = 0)
 
 median_bbwaa_batter <- hof_projection_data |> filter(bbwaa == 1, pitcher == 0) |>
-    summarize(median_season_BOOG = median(season_BOOG), median_career_to_date_BOOG = median(career_to_date_BOOG), .by = c(age, pitcher)) |>
-    filter(median_career_to_date_BOOG > 0) |>
-    rename(season_BOOG = median_season_BOOG, career_to_date_BOOG = median_career_to_date_BOOG) |>
+    summarize(median_season_BOOG = median(season_BOOG), median_cumsum_BOOG = median(cumsum_BOOG), .by = c(age, pitcher)) |>
+    filter(median_cumsum_BOOG > 0) |>
+    rename(season_BOOG = median_season_BOOG, cumsum_BOOG = median_cumsum_BOOG) |>
     mutate(name = "Median BBWAA Batter", key_person = name, starter = 0)
 
 median_hof_pitcher <- hof_projection_data |> filter(hof == 1, pitcher == 1) |>
-    summarize(median_season_BOOG = median(season_BOOG), median_career_to_date_BOOG = median(career_to_date_BOOG), .by = c(age, starter)) |>
-    filter(median_career_to_date_BOOG > 0) |>
-    rename(season_BOOG = median_season_BOOG, career_to_date_BOOG = median_career_to_date_BOOG) |>
+    summarize(median_season_BOOG = median(season_BOOG), median_cumsum_BOOG = median(cumsum_BOOG), .by = c(age, starter)) |>
+    filter(median_cumsum_BOOG > 0) |>
+    rename(season_BOOG = median_season_BOOG, cumsum_BOOG = median_cumsum_BOOG) |>
     mutate(name = if_else(starter == 1, "Median HOF SP", "Median HOF RP"), key_person = name, pitcher = 1)
 
 median_bbwaa_pitcher <- hof_projection_data |> filter(bbwaa == 1, pitcher == 1) |>
-    summarize(median_season_BOOG = median(season_BOOG), median_career_to_date_BOOG = median(career_to_date_BOOG), .by = c(age, starter)) |>
-    filter(median_career_to_date_BOOG > 0) |>
-    rename(season_BOOG = median_season_BOOG, career_to_date_BOOG = median_career_to_date_BOOG) |>
+    summarize(median_season_BOOG = median(season_BOOG), median_cumsum_BOOG = median(cumsum_BOOG), .by = c(age, starter)) |>
+    filter(median_cumsum_BOOG > 0) |>
+    rename(season_BOOG = median_season_BOOG, cumsum_BOOG = median_cumsum_BOOG) |>
     mutate(name = if_else(starter == 1, "Median BBWAA SP", "Median BBWAA RP"), key_person = name, pitcher = 1)
 
 hof_batter_ct <- nrow(boog_seasons |> filter(pitcher == 0, hof == 1) |> distinct(key_person))
@@ -165,7 +186,7 @@ marginal_rows <- tibble(
     key_person = character(),
     name = character(),
     age = numeric(),
-    career_to_date_BOOG = numeric(),
+    cumsum_BOOG = numeric(),
     pitcher = numeric(),
     starter = numeric()
 )
@@ -176,7 +197,7 @@ for (player_age in (hof_projection_data |> distinct(pitcher, age) |> count(age) 
             key_person = "Marginal HOF Batter",
             name = "Marginal HOF Batter",
             age = player_age,
-            career_to_date_BOOG = min((hof_projection_data |> filter(pitcher == 0, age == player_age) |> slice_max(career_to_date_BOOG, n = hof_batter_ct))$career_to_date_BOOG),
+            cumsum_BOOG = min((hof_projection_data |> filter(pitcher == 0, age == player_age) |> slice_max(cumsum_BOOG, n = hof_batter_ct))$cumsum_BOOG),
             pitcher = 0,
             starter = 0,
         ) |>
@@ -184,7 +205,7 @@ for (player_age in (hof_projection_data |> distinct(pitcher, age) |> count(age) 
             key_person = "Marginal HOF SP",
             name = "Marginal HOF SP",
             age = player_age,
-            career_to_date_BOOG = min((hof_projection_data |> filter(pitcher == 1, starter == 1, age == player_age) |> slice_max(career_to_date_BOOG, n = hof_sp_ct))$career_to_date_BOOG),
+            cumsum_BOOG = min((hof_projection_data |> filter(pitcher == 1, starter == 1, age == player_age) |> slice_max(cumsum_BOOG, n = hof_sp_ct))$cumsum_BOOG),
             pitcher = 1,
             starter = 1
         ) |>
@@ -192,7 +213,7 @@ for (player_age in (hof_projection_data |> distinct(pitcher, age) |> count(age) 
             key_person = "Marginal HOF RP",
             name = "Marginal HOF RP",
             age = player_age,
-            career_to_date_BOOG = min((hof_projection_data |> filter(pitcher == 1, starter == 0, age == player_age) |> slice_max(career_to_date_BOOG, n = hof_rp_ct))$career_to_date_BOOG),
+            cumsum_BOOG = min((hof_projection_data |> filter(pitcher == 1, starter == 0, age == player_age) |> slice_max(cumsum_BOOG, n = hof_rp_ct))$cumsum_BOOG),
             pitcher = 1,
             starter = 0
         ) |>
@@ -200,7 +221,7 @@ for (player_age in (hof_projection_data |> distinct(pitcher, age) |> count(age) 
             key_person = "Marginal BBWAA Batter",
             name = "Marginal BBWAA Batter",
             age = player_age,
-            career_to_date_BOOG = min((hof_projection_data |> filter(pitcher == 0, age == player_age) |> slice_max(career_to_date_BOOG, n = bbwaa_batter_ct))$career_to_date_BOOG),
+            cumsum_BOOG = min((hof_projection_data |> filter(pitcher == 0, age == player_age) |> slice_max(cumsum_BOOG, n = bbwaa_batter_ct))$cumsum_BOOG),
             pitcher = 0,
             starter = 0
         ) |>
@@ -208,7 +229,7 @@ for (player_age in (hof_projection_data |> distinct(pitcher, age) |> count(age) 
             key_person = "Marginal BBWAA SP",
             name = "Marginal BBWAA SP",
             age = player_age,
-            career_to_date_BOOG = min((hof_projection_data |> filter(pitcher == 1, starter == 1, age == player_age) |> slice_max(career_to_date_BOOG, n = bbwaa_sp_ct))$career_to_date_BOOG),
+            cumsum_BOOG = min((hof_projection_data |> filter(pitcher == 1, starter == 1, age == player_age) |> slice_max(cumsum_BOOG, n = bbwaa_sp_ct))$cumsum_BOOG),
             pitcher = 1,
             starter = 1
         ) |>
@@ -216,7 +237,7 @@ for (player_age in (hof_projection_data |> distinct(pitcher, age) |> count(age) 
             key_person = "Marginal BBWAA RP",
             name = "Marginal BBWAA RP",
             age = player_age,
-            career_to_date_BOOG = min((hof_projection_data |> filter(pitcher == 1, starter == 0, age == player_age) |> slice_max(career_to_date_BOOG, n = bbwaa_rp_ct))$career_to_date_BOOG),
+            cumsum_BOOG = min((hof_projection_data |> filter(pitcher == 1, starter == 0, age == player_age) |> slice_max(cumsum_BOOG, n = bbwaa_rp_ct))$cumsum_BOOG),
             pitcher = 1,
             starter = 0
         )
@@ -227,23 +248,23 @@ hof_pace <- bind_rows(median_hof_batter, median_hof_pitcher, median_bbwaa_batter
 
 print("Calculating logistic regressions...")
 
-logit_young_batter <- boog_seasons |> filter(career_to_date_BOOG > 0, age <= 21, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 0, .by = key_person) |> 
-    select(hof, bbwaa, career_to_date_BOOG)
+logit_young_batter <- boog_seasons |> filter(cumsum_BOOG > 0, age <= 21, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 0, .by = key_person) |> 
+    select(hof, bbwaa, cumsum_BOOG)
 
-logit_final_batter <- boog_seasons |> filter(career_to_date_BOOG > 0, season == max_season, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 0, .by = key_person) |>
-    select(hof, bbwaa, career_to_date_BOOG)
+logit_final_batter <- boog_seasons |> filter(cumsum_BOOG > 0, season == max_season, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 0, .by = key_person) |>
+    select(hof, bbwaa, cumsum_BOOG)
 
-logit_young_sp <- boog_seasons |> filter(career_to_date_BOOG > 0, age <= 21, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 1, starter == 1, .by = key_person) |> 
-    select(hof, bbwaa, career_to_date_BOOG)
+logit_young_sp <- boog_seasons |> filter(cumsum_BOOG > 0, age <= 21, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 1, starter == 1, .by = key_person) |> 
+    select(hof, bbwaa, cumsum_BOOG)
 
-logit_young_rp <- boog_seasons |> filter(career_to_date_BOOG > 0, age <= 21, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof) & pitcher == 1, starter == 0, .by = key_person) |> 
-    select(hof, bbwaa, career_to_date_BOOG)
+logit_young_rp <- boog_seasons |> filter(cumsum_BOOG > 0, age <= 21, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof) & pitcher == 1, starter == 0, .by = key_person) |> 
+    select(hof, bbwaa, cumsum_BOOG)
 
-logit_final_sp <- boog_seasons |> filter(career_to_date_BOOG > 0, season == max_season, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 1, starter == 1, .by = key_person) |>
-    select(hof, bbwaa, career_to_date_BOOG)
+logit_final_sp <- boog_seasons |> filter(cumsum_BOOG > 0, season == max_season, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 1, starter == 1, .by = key_person) |>
+    select(hof, bbwaa, cumsum_BOOG)
 
-logit_final_rp <- boog_seasons |> filter(career_to_date_BOOG > 0, season == max_season, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 1, starter == 0, .by = key_person) |>
-    select(hof, bbwaa, career_to_date_BOOG)
+logit_final_rp <- boog_seasons |> filter(cumsum_BOOG > 0, season == max_season, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 1, starter == 0, .by = key_person) |>
+    select(hof, bbwaa, cumsum_BOOG)
 
 hof_young_batter_model <- glm(hof ~., family = binomial(link = "logit"), data = (logit_young_batter |> select(!bbwaa)))
 bbwaa_young_batter_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (logit_young_batter |> select(!hof)))
@@ -261,68 +282,140 @@ bbwaa_final_rp_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = 
 
 boog_seasons <- boog_seasons |> mutate(
     hof_in_progress_rate = case_when(
-        pitcher == 0 ~ predict(hof_young_batter_model, newdata = (boog_seasons |> select(age, career_to_date_BOOG)), type="response"),
-        pitcher == 1  ~ (career_to_date_starter_IP * predict(hof_young_sp_model, newdata = (boog_seasons |> select(age, career_to_date_BOOG)), type="response") + 
-            career_to_date_reliever_IP * predict(hof_young_rp_model, newdata = (boog_seasons |> select(age, career_to_date_BOOG)), type="response")) / (career_to_date_starter_IP + career_to_date_reliever_IP)
+        pitcher == 0 ~ predict(hof_young_batter_model, newdata = (boog_seasons |> select(age, cumsum_BOOG)), type="response"),
+        cumsum_BOOG_start + cumsum_BOOG_relief > 0 ~ (cumsum_BOOG_start * predict(hof_young_sp_model, newdata = (boog_seasons |> select(age, cumsum_BOOG)), type="response") + 
+            cumsum_BOOG_relief * predict(hof_young_rp_model, newdata = (boog_seasons |> select(age, cumsum_BOOG)), type="response")) / (cumsum_BOOG_start + cumsum_BOOG_relief),
+        .default = 0
     ),
     bbwaa_in_progress_rate = case_when(
-        pitcher == 0 ~ predict(bbwaa_young_batter_model, newdata = (boog_seasons |> select(age, career_to_date_BOOG)), type="response"),
-        pitcher == 1  ~ (career_to_date_starter_IP * predict(bbwaa_young_sp_model, newdata = (boog_seasons |> select(age, career_to_date_BOOG)), type="response") + 
-            career_to_date_reliever_IP * predict(bbwaa_young_rp_model, newdata = (boog_seasons |> select(age, career_to_date_BOOG)), type="response")) / (career_to_date_starter_IP + career_to_date_reliever_IP)
+        pitcher == 0 ~ predict(bbwaa_young_batter_model, newdata = (boog_seasons |> select(age, cumsum_BOOG)), type="response"),
+        cumsum_BOOG_start + cumsum_BOOG_relief > 0  ~ (cumsum_BOOG_start * predict(bbwaa_young_sp_model, newdata = (boog_seasons |> select(age, cumsum_BOOG)), type="response") + 
+            cumsum_BOOG_relief * predict(bbwaa_young_rp_model, newdata = (boog_seasons |> select(age, cumsum_BOOG)), type="response")) / (cumsum_BOOG_start + cumsum_BOOG_relief),
+        .default = 0
     ),
     hof_final_rate = case_when(
-        pitcher == 0 ~ predict(hof_final_batter_model, newdata = (boog_seasons |> select(age, career_to_date_BOOG)), type="response"),
-        pitcher == 1 ~ (career_to_date_starter_IP * predict(hof_final_sp_model, newdata = (boog_seasons |> select(age, career_to_date_BOOG)), type="response") +
-            career_to_date_reliever_IP * predict(hof_final_rp_model, newdata = (boog_seasons |> select(age, career_to_date_BOOG)), type="response")) / (career_to_date_starter_IP + career_to_date_reliever_IP)
+        pitcher == 0 ~ predict(hof_final_batter_model, newdata = (boog_seasons |> select(age, cumsum_BOOG)), type="response"),
+        cumsum_BOOG_start + cumsum_BOOG_relief > 0 ~ (cumsum_BOOG_start * predict(hof_final_sp_model, newdata = (boog_seasons |> select(age, cumsum_BOOG)), type="response") +
+            cumsum_BOOG_relief * predict(hof_final_rp_model, newdata = (boog_seasons |> select(age, cumsum_BOOG)), type="response")) / (cumsum_BOOG_start + cumsum_BOOG_relief),
+        .default = 0
     ),
     bbwaa_final_rate = case_when(
-        pitcher == 0 ~ predict(bbwaa_final_batter_model, newdata = (boog_seasons |> select(age, career_to_date_BOOG)), type="response"),
-        pitcher == 1 ~ (career_to_date_starter_IP * predict(bbwaa_final_sp_model, newdata = (boog_seasons |> select(age, career_to_date_BOOG)), type="response") +
-            career_to_date_reliever_IP * predict(bbwaa_final_rp_model, newdata = (boog_seasons |> select(age, career_to_date_BOOG)), type="response")) / (career_to_date_starter_IP + career_to_date_reliever_IP)
+        pitcher == 0 ~ predict(bbwaa_final_batter_model, newdata = (boog_seasons |> select(age, cumsum_BOOG)), type="response"),
+        cumsum_BOOG_start + cumsum_BOOG_relief > 0 ~ (cumsum_BOOG_start * predict(bbwaa_final_sp_model, newdata = (boog_seasons |> select(age, cumsum_BOOG)), type="response") +
+            cumsum_BOOG_relief * predict(bbwaa_final_rp_model, newdata = (boog_seasons |> select(age, cumsum_BOOG)), type="response")) / (cumsum_BOOG_start + cumsum_BOOG_relief),
+        .default = 0
+    ),
+    hof_in_progress_starter_rate = case_when(
+        pitcher == 0 ~ 0,
+        cumsum_BOOG_start == 0 ~ 0,
+        .default = predict(hof_young_sp_model, newdata = (boog_seasons |> select(age, cumsum_BOOG_start) |> rename(cumsum_BOOG = cumsum_BOOG_start)), type="response") 
+    ),
+    bbwaa_in_progress_starter_rate = case_when(
+        pitcher == 0 ~ 0,
+        cumsum_BOOG_start == 0 ~ 0,
+        .default = predict(bbwaa_young_sp_model, newdata = (boog_seasons |> select(age, cumsum_BOOG_start) |> rename(cumsum_BOOG = cumsum_BOOG_start)), type="response") 
+    ),
+    hof_final_starter_rate = case_when(
+        pitcher == 0 ~ 0,
+        cumsum_BOOG_start == 0 ~ 0,
+        .default = predict(hof_final_sp_model, newdata = (boog_seasons |> select(age, cumsum_BOOG_start) |> rename(cumsum_BOOG = cumsum_BOOG_start)), type="response") 
+    ),
+    bbwaa_final_starter_rate = case_when(
+        pitcher == 0 ~ 0,
+        cumsum_BOOG_start == 0 ~ 0,
+        .default = predict(bbwaa_final_sp_model, newdata = (boog_seasons |> select(age, cumsum_BOOG_start) |> rename(cumsum_BOOG = cumsum_BOOG_start)), type="response") 
+    ),
+    hof_in_progress_relief_rate = case_when(
+        pitcher == 0 ~ 0,
+        cumsum_BOOG_relief == 0 ~ 0,
+        .default = predict(hof_young_rp_model, newdata = (boog_seasons |> select(age, cumsum_BOOG_relief) |> rename(cumsum_BOOG = cumsum_BOOG_relief)), type="response") 
+    ),
+    bbwaa_in_progress_relief_rate = case_when(
+        pitcher == 0 ~ 0,
+        cumsum_BOOG_relief == 0 ~ 0,
+        .default = predict(bbwaa_young_rp_model, newdata = (boog_seasons |> select(age, cumsum_BOOG_relief) |> rename(cumsum_BOOG = cumsum_BOOG_relief)), type="response") 
+    ),
+    hof_final_relief_rate = case_when(
+        pitcher == 0 ~ 0,
+        cumsum_BOOG_relief == 0 ~ 0,
+        .default = predict(hof_final_rp_model, newdata = (boog_seasons |> select(age, cumsum_BOOG_relief) |> rename(cumsum_BOOG = cumsum_BOOG_relief)), type="response") 
+    ),
+    bbwaa_final_relief_rate = case_when(
+        pitcher == 0 ~ 0,
+        cumsum_BOOG_relief == 0 ~ 0,
+        .default = predict(bbwaa_final_rp_model, newdata = (boog_seasons |> select(age, cumsum_BOOG_relief) |> rename(cumsum_BOOG = cumsum_BOOG_relief)), type="response") 
+    ),
+    hof_in_progress_pitcher_rate = case_when(
+        pitcher == 0 ~ 0,
+        hof_in_progress_rate > hof_in_progress_starter_rate & hof_in_progress_rate > hof_in_progress_relief_rate ~ hof_in_progress_rate,
+        hof_in_progress_starter_rate > hof_in_progress_relief_rate ~ hof_in_progress_starter_rate,
+        .default = hof_in_progress_relief_rate
+    ),
+    bbwaa_in_progress_pitcher_rate = case_when(
+        pitcher == 0 ~ 0,
+        bbwaa_in_progress_rate > bbwaa_in_progress_starter_rate & bbwaa_in_progress_rate > bbwaa_in_progress_relief_rate ~ bbwaa_in_progress_rate,
+        bbwaa_in_progress_starter_rate > bbwaa_in_progress_relief_rate ~ bbwaa_in_progress_starter_rate,
+        .default = bbwaa_in_progress_relief_rate
+    ),
+    hof_final_pitcher_rate = case_when(
+        pitcher == 0 ~ 0,
+        hof_final_rate > hof_final_starter_rate & hof_final_rate > hof_final_relief_rate ~ hof_final_rate,
+        hof_final_starter_rate > hof_final_relief_rate ~ hof_final_starter_rate,
+        .default = hof_final_relief_rate
+    ),
+    bbwaa_final_pitcher_rate = case_when(
+        pitcher == 0 ~ 0,
+        bbwaa_final_rate > bbwaa_final_starter_rate & bbwaa_final_rate > bbwaa_final_relief_rate ~ bbwaa_final_rate,
+        bbwaa_final_starter_rate > bbwaa_final_relief_rate ~ bbwaa_final_starter_rate,
+        .default = bbwaa_final_relief_rate
     ),
     hof_rate = case_when(
-        career_to_date_BOOG == 0 ~ hof_rate,
-        age > 36 | (season == max_season & active == 0) ~ hof_final_rate,
-        age <= 21 ~ hof_in_progress_rate,
+        cumsum_BOOG == 0 ~ hof_rate,
+        pitcher == 0 & (age > 36 | (season == max_season & active == 0)) ~ hof_final_rate,
+        age > 36 | (season == max_season & active == 0) ~ hof_final_pitcher_rate,
+        pitcher == 0 & age <= 21 ~ hof_in_progress_rate,
+        age <= 21 ~ hof_in_progress_pitcher_rate,
         .default = hof_rate
     ),
     bbwaa_rate = case_when(
-        career_to_date_BOOG == 0 ~ bbwaa_rate,
-        age > 36 | (season == max_season & active == 0) ~ bbwaa_final_rate,
-        age <= 21 ~ bbwaa_in_progress_rate,
+        cumsum_BOOG == 0 ~ bbwaa_rate,
+        pitcher == 0 & (age > 36 | (season == max_season & active == 0)) ~ bbwaa_final_rate,
+        age > 36 | (season == max_season & active == 0) ~ bbwaa_final_pitcher_rate,
+        pitcher == 0 & age <= 21 ~ bbwaa_in_progress_rate,
+        age <= 21 ~ bbwaa_in_progress_pitcher_rate,
         .default = bbwaa_rate
     )
 )
 
 hof_pace <- hof_pace |> mutate(
     hof_in_progress_rate = case_when(
-        pitcher == 0 ~ predict(hof_young_batter_model, newdata = (hof_pace |> select(age, career_to_date_BOOG)), type="response"),
-        pitcher == 1 & starter == 1 ~ predict(hof_young_sp_model, newdata = (hof_pace |> select(age, career_to_date_BOOG)), type="response"),
-        pitcher == 1 & starter == 0 ~ predict(hof_young_rp_model, newdata = (hof_pace |> select(age, career_to_date_BOOG)), type="response"),
+        pitcher == 0 ~ predict(hof_young_batter_model, newdata = (hof_pace |> select(age, cumsum_BOOG)), type="response"),
+        pitcher == 1 & starter == 1 ~ predict(hof_young_sp_model, newdata = (hof_pace |> select(age, cumsum_BOOG)), type="response"),
+        pitcher == 1 & starter == 0 ~ predict(hof_young_rp_model, newdata = (hof_pace |> select(age, cumsum_BOOG)), type="response"),
     ),
     bbwaa_in_progress_rate = case_when(
-        pitcher == 0 ~ predict(bbwaa_young_batter_model, newdata = (hof_pace |> select(age, career_to_date_BOOG)), type="response"),
-        pitcher == 1 & starter == 1 ~ predict(bbwaa_young_sp_model, newdata = (hof_pace |> select(age, career_to_date_BOOG)), type="response"),
-        pitcher == 1 & starter == 0 ~ predict(bbwaa_young_rp_model, newdata = (hof_pace |> select(age, career_to_date_BOOG)), type="response"),
+        pitcher == 0 ~ predict(bbwaa_young_batter_model, newdata = (hof_pace |> select(age, cumsum_BOOG)), type="response"),
+        pitcher == 1 & starter == 1 ~ predict(bbwaa_young_sp_model, newdata = (hof_pace |> select(age, cumsum_BOOG)), type="response"),
+        pitcher == 1 & starter == 0 ~ predict(bbwaa_young_rp_model, newdata = (hof_pace |> select(age, cumsum_BOOG)), type="response"),
     ),
     hof_final_rate = case_when(
-        pitcher == 0 ~ predict(hof_final_batter_model, newdata = (hof_pace |> select(age, career_to_date_BOOG)), type="response"),
-        pitcher == 1 & starter == 1 ~ predict(hof_final_sp_model, newdata = (hof_pace |> select(age, career_to_date_BOOG)), type="response"),
-        pitcher == 1 & starter == 0 ~ predict(hof_final_rp_model, newdata = (hof_pace |> select(age, career_to_date_BOOG)), type="response"),
+        pitcher == 0 ~ predict(hof_final_batter_model, newdata = (hof_pace |> select(age, cumsum_BOOG)), type="response"),
+        pitcher == 1 & starter == 1 ~ predict(hof_final_sp_model, newdata = (hof_pace |> select(age, cumsum_BOOG)), type="response"),
+        pitcher == 1 & starter == 0 ~ predict(hof_final_rp_model, newdata = (hof_pace |> select(age, cumsum_BOOG)), type="response"),
     ),
     bbwaa_final_rate = case_when(
-        pitcher == 0 ~ predict(bbwaa_final_batter_model, newdata = (hof_pace |> select(age, career_to_date_BOOG)), type="response"),
-        pitcher == 1 & starter == 1 ~ predict(bbwaa_final_sp_model, newdata = (hof_pace |> select(age, career_to_date_BOOG)), type="response"),
-        pitcher == 1 & starter == 0 ~ predict(bbwaa_final_rp_model, newdata = (hof_pace |> select(age, career_to_date_BOOG)), type="response"),
+        pitcher == 0 ~ predict(bbwaa_final_batter_model, newdata = (hof_pace |> select(age, cumsum_BOOG)), type="response"),
+        pitcher == 1 & starter == 1 ~ predict(bbwaa_final_sp_model, newdata = (hof_pace |> select(age, cumsum_BOOG)), type="response"),
+        pitcher == 1 & starter == 0 ~ predict(bbwaa_final_rp_model, newdata = (hof_pace |> select(age, cumsum_BOOG)), type="response"),
     ),
     hof_rate = case_when(
-        career_to_date_BOOG == 0 ~ hof_rate,
+        cumsum_BOOG == 0 ~ hof_rate,
         age > 36 ~ hof_final_rate,
         age <= 21 ~ hof_in_progress_rate,
         .default = hof_rate
     ),
     bbwaa_rate = case_when(
-        career_to_date_BOOG == 0 ~ bbwaa_rate,
+        cumsum_BOOG == 0 ~ bbwaa_rate,
         age > 36 ~ bbwaa_final_rate,
         age <= 21 ~ bbwaa_in_progress_rate,
         .default = bbwaa_rate
@@ -330,14 +423,14 @@ hof_pace <- hof_pace |> mutate(
 )
 
 for (curr_age in 22:36) {
-    logit_batter <- boog_seasons |> filter(career_to_date_BOOG > 0, age == curr_age, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 0, .by = key_person) |>
-    select(hof, bbwaa, career_to_date_BOOG)
+    logit_batter <- boog_seasons |> filter(cumsum_BOOG > 0, age == curr_age, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 0, .by = key_person) |>
+    select(hof, bbwaa, cumsum_BOOG)
 
-    logit_sp <- boog_seasons |> filter(career_to_date_BOOG > 0, age == curr_age, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 1, starter == 1, .by = key_person) |>
-    select(hof, bbwaa, career_to_date_BOOG)
+    logit_sp <- boog_seasons |> filter(cumsum_BOOG > 0, age == curr_age, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 1, starter == 1, .by = key_person) |>
+    select(hof, bbwaa, cumsum_BOOG)
 
-    logit_rp <- boog_seasons |> filter(career_to_date_BOOG > 0, age == curr_age, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 1, starter == 0, .by = key_person) |>
-    select(hof, bbwaa, career_to_date_BOOG)
+    logit_rp <- boog_seasons |> filter(cumsum_BOOG > 0, age == curr_age, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 1, starter == 0, .by = key_person) |>
+    select(hof, bbwaa, cumsum_BOOG)
 
     hof_batter_model <- glm(hof ~., family = binomial(link = "logit"), data = (logit_batter |> select(!bbwaa)))
     bbwaa_batter_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (logit_batter |> select(!hof)))
@@ -349,28 +442,66 @@ for (curr_age in 22:36) {
     boog_seasons <- boog_seasons |> mutate(
         hof_in_progress_rate = case_when(
             age != curr_age ~ hof_in_progress_rate,
-            pitcher == 0 ~ predict(hof_batter_model, newdata = (boog_seasons |> select(career_to_date_BOOG)), type="response"),
-            pitcher == 1 ~ (career_to_date_starter_IP * predict(hof_sp_model, newdata = (boog_seasons |> select(career_to_date_BOOG)), type="response") + 
-                career_to_date_reliever_IP * predict(hof_rp_model, newdata = (boog_seasons |> select(career_to_date_BOOG)), type="response")) / (career_to_date_starter_IP + career_to_date_reliever_IP)
+            pitcher == 0 ~ predict(hof_batter_model, newdata = (boog_seasons |> select(cumsum_BOOG)), type="response"),
+            pitcher == 1 ~ (cumsum_BOOG_start * predict(hof_sp_model, newdata = (boog_seasons |> select(cumsum_BOOG)), type="response") + 
+                cumsum_BOOG_relief * predict(hof_rp_model, newdata = (boog_seasons |> select(cumsum_BOOG)), type="response")) / (cumsum_BOOG_start + cumsum_BOOG_relief)
         ),
         bbwaa_in_progress_rate = case_when(
             age != curr_age ~ bbwaa_in_progress_rate,
-            pitcher == 0 ~ predict(bbwaa_batter_model, newdata = (boog_seasons |> select(career_to_date_BOOG)), type="response"),
-            pitcher == 1 ~ (career_to_date_starter_IP * predict(bbwaa_sp_model, newdata = (boog_seasons |> select(career_to_date_BOOG)), type="response") +
-                career_to_date_reliever_IP * predict(bbwaa_rp_model, newdata = (boog_seasons |> select(career_to_date_BOOG)), type="response")) / (career_to_date_starter_IP + career_to_date_reliever_IP)
+            pitcher == 0 ~ predict(bbwaa_batter_model, newdata = (boog_seasons |> select(cumsum_BOOG)), type="response"),
+            pitcher == 1 ~ (cumsum_BOOG_start * predict(bbwaa_sp_model, newdata = (boog_seasons |> select(cumsum_BOOG)), type="response") +
+                cumsum_BOOG_relief * predict(bbwaa_rp_model, newdata = (boog_seasons |> select(cumsum_BOOG)), type="response")) / (cumsum_BOOG_start + cumsum_BOOG_relief)
+        ),
+        hof_in_progress_starter_rate = case_when(
+            pitcher == 0 ~ 0,
+            cumsum_BOOG_start == 0 ~ 0,
+            .default = predict(hof_sp_model, newdata = (boog_seasons |> select(cumsum_BOOG_start) |> rename(cumsum_BOOG = cumsum_BOOG_start)), type="response") 
+        ),
+        bbwaa_in_progress_starter_rate = case_when(
+            pitcher == 0 ~ 0,
+            cumsum_BOOG_start == 0 ~ 0,
+            .default = predict(bbwaa_sp_model, newdata = (boog_seasons |> select(cumsum_BOOG_start) |> rename(cumsum_BOOG = cumsum_BOOG_start)), type="response") 
+        ),
+        hof_in_progress_relief_rate = case_when(
+            pitcher == 0 ~ 0,
+            cumsum_BOOG_relief == 0 ~ 0,
+            .default = predict(hof_rp_model, newdata = (boog_seasons |> select(cumsum_BOOG_start) |> rename(cumsum_BOOG = cumsum_BOOG_start)), type="response") 
+        ),
+        bbwaa_in_progress_relief_rate = case_when(
+            pitcher == 0 ~ 0,
+            cumsum_BOOG_relief == 0 ~ 0,
+            .default = predict(bbwaa_rp_model, newdata = (boog_seasons |> select(cumsum_BOOG_start) |> rename(cumsum_BOOG = cumsum_BOOG_start)), type="response") 
+        ),
+        hof_in_progress_pitcher_rate = case_when(
+            pitcher == 0 ~ 0,
+            hof_in_progress_rate > hof_in_progress_starter_rate & hof_in_progress_rate > hof_in_progress_relief_rate ~ hof_in_progress_rate,
+            hof_in_progress_starter_rate > hof_in_progress_relief_rate ~ hof_in_progress_starter_rate,
+            .default = hof_in_progress_relief_rate
+        ),
+        bbwaa_in_progress_pitcher_rate = case_when(
+            pitcher == 0 ~ 0,
+            bbwaa_in_progress_rate > bbwaa_in_progress_starter_rate & bbwaa_in_progress_rate > bbwaa_in_progress_relief_rate ~ bbwaa_in_progress_rate,
+            bbwaa_in_progress_starter_rate > bbwaa_in_progress_relief_rate ~ bbwaa_in_progress_starter_rate,
+            .default = bbwaa_in_progress_relief_rate
         ),
         hof_rate = case_when(
             age != curr_age ~ hof_rate,
-            career_to_date_BOOG == 0 ~ 0,
-            (season == max_season & active == 0) ~ hof_final_rate,
-            hof_in_progress_rate > hof_final_rate ~ hof_in_progress_rate,
+            cumsum_BOOG == 0 ~ 0,
+            pitcher == 0 & season == max_season & active == 0 ~ hof_final_rate,
+            season == max_season & active == 0 ~ hof_final_pitcher_rate,
+            pitcher == 0 & hof_in_progress_rate > hof_final_rate ~ hof_in_progress_rate,
+            pitcher == 1 & hof_in_progress_pitcher_rate > hof_final_pitcher_rate ~ hof_in_progress_pitcher_rate,
+            pitcher == 1 ~ hof_final_pitcher_rate,
             .default = hof_final_rate
         ),
         bbwaa_rate = case_when(
             age != curr_age ~ bbwaa_rate,
-            career_to_date_BOOG == 0 ~ 0,
-            (season == max_season & active == 0) ~ bbwaa_final_rate,
-            bbwaa_in_progress_rate > bbwaa_final_rate ~ bbwaa_in_progress_rate,
+            cumsum_BOOG == 0 ~ 0,
+            pitcher == 0 & season == max_season & active == 0 ~ bbwaa_final_rate,
+            season == max_season & active == 0 ~ bbwaa_final_pitcher_rate,
+            pitcher == 0 & bbwaa_in_progress_rate > bbwaa_final_rate ~ bbwaa_in_progress_rate,
+            pitcher == 1 & bbwaa_in_progress_pitcher_rate > bbwaa_final_pitcher_rate ~ bbwaa_in_progress_pitcher_rate,
+            pitcher == 1 ~ bbwaa_final_pitcher_rate,
             .default = bbwaa_final_rate
         )
     )
@@ -378,25 +509,25 @@ for (curr_age in 22:36) {
     hof_pace <- hof_pace |> mutate(
         hof_in_progress_rate = case_when(
             age != curr_age ~ hof_in_progress_rate,
-            pitcher == 0 ~ predict(hof_batter_model, newdata = (hof_pace |> select(career_to_date_BOOG)), type="response"),
-            pitcher == 1 & starter == 1 ~ predict(hof_sp_model, newdata = (hof_pace |> select(career_to_date_BOOG)), type="response"),
-            pitcher == 1 & starter == 0 ~ predict(hof_rp_model, newdata = (hof_pace |> select(career_to_date_BOOG)), type="response"),
+            pitcher == 0 ~ predict(hof_batter_model, newdata = (hof_pace |> select(cumsum_BOOG)), type="response"),
+            pitcher == 1 & starter == 1 ~ predict(hof_sp_model, newdata = (hof_pace |> select(cumsum_BOOG)), type="response"),
+            pitcher == 1 & starter == 0 ~ predict(hof_rp_model, newdata = (hof_pace |> select(cumsum_BOOG)), type="response"),
         ),
         bbwaa_in_progress_rate = case_when(
             age != curr_age ~ bbwaa_in_progress_rate,
-            pitcher == 0 ~ predict(bbwaa_batter_model, newdata = (hof_pace |> select(career_to_date_BOOG)), type="response"),
-            pitcher == 1 & starter == 1 ~ predict(bbwaa_sp_model, newdata = (hof_pace |> select(career_to_date_BOOG)), type="response"),
-            pitcher == 1 & starter == 0 ~ predict(bbwaa_rp_model, newdata = (hof_pace |> select(career_to_date_BOOG)), type="response"),
+            pitcher == 0 ~ predict(bbwaa_batter_model, newdata = (hof_pace |> select(cumsum_BOOG)), type="response"),
+            pitcher == 1 & starter == 1 ~ predict(bbwaa_sp_model, newdata = (hof_pace |> select(cumsum_BOOG)), type="response"),
+            pitcher == 1 & starter == 0 ~ predict(bbwaa_rp_model, newdata = (hof_pace |> select(cumsum_BOOG)), type="response"),
         ),
         hof_rate = case_when(
             age != curr_age ~ hof_rate,
-            career_to_date_BOOG == 0 ~ 0,
+            cumsum_BOOG == 0 ~ 0,
             hof_in_progress_rate > hof_final_rate ~ hof_in_progress_rate,
             .default = hof_final_rate
         ),
         bbwaa_rate = case_when(
             age != curr_age ~ bbwaa_rate,
-            career_to_date_BOOG == 0 ~ 0,
+            cumsum_BOOG == 0 ~ 0,
             bbwaa_in_progress_rate > bbwaa_final_rate ~ bbwaa_in_progress_rate,
             .default = bbwaa_final_rate
         )
@@ -405,15 +536,16 @@ for (curr_age in 22:36) {
 
 print("Writing output files")
 
+boog_seasons <- boog_seasons |> select(!hof_in_progress_rate:bbwaa_final_pitcher_rate)
 hof_pace <- hof_pace |> select(!pitcher) |> select(!starter) |> select(!hof_in_progress_rate:bbwaa_final_rate)
 
 
 spreadsheet_entries <- boog_seasons |> 
     filter(hof | career_BOOG >= 10 | (pitcher == 1 & starter == 0 & career_BOOG >= 5) | (active == 1 & career_BOOG >= 0.05)) |>
     filter(n() > 1, .by = key_person) |>
-    select(!hof:max_season) |> select(!career_to_date_starter_IP:career_BOOG) |> select(!season:pitcher) |> select(!starter:bbwaa_final_rate) |> select(!starter_IP:reliever_IP)
+    select(!hof:max_season) |> select(!cumsum_BOOG_start:career_BOOG) |> select(!season:starter)
 
-spreadsheet_entries <- bind_rows(spreadsheet_entries, hof_pace |> filter(career_to_date_BOOG > 0))
+spreadsheet_entries <- bind_rows(spreadsheet_entries, hof_pace |> filter(cumsum_BOOG > 0))
 
 names_to_check <- (spreadsheet_entries |> distinct(key_person, name) |> count(name) |> filter(n > 1))$name
 
@@ -427,14 +559,12 @@ active_boog_scores <- boog_seasons |> filter(active == 1) |>
     group_by(key_person) |>
     mutate(
         hof_rate_delta = hof_rate - replace_na(lag(hof_rate, default = 0), 0),
-        bbwaa_rate_delta = bbwaa_rate - replace_na(lag(bbwaa_rate, default = 0), 0),
-        hof_compiling = (hof_rate == hof_final_rate),
-        bbwaa_compiling = (bbwaa_rate == bbwaa_final_rate)
+        bbwaa_rate_delta = bbwaa_rate - replace_na(lag(bbwaa_rate, default = 0), 0)
     ) |> 
     ungroup() |>
     filter(season == curr_season) |>
-    select(!key_person) |> select(!season) |> select(!hof:career_to_date_BOOG) |> select(!hof_in_progress_rate:bbwaa_final_rate) |>
-    relocate(name) |> relocate(pitcher, .after = age) |>
+    select(!key_person) |> select(!season) |> select(!hof:cumsum_BOOG_relief) |>
+    relocate(name) |> relocate(pitcher, .after = age) |> relocate(starter, .after = pitcher) |>
     arrange(desc(career_BOOG))
 
 write_csv(active_boog_scores, "output/active-player-boogs.csv")
