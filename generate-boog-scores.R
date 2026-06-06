@@ -477,12 +477,12 @@ for (curr_age in 22:36) {
         hof_in_progress_relief_rate = case_when(
             pitcher == 0 ~ 0,
             cumsum_BOOG_relief == 0 ~ 0,
-            .default = predict(hof_rp_model, newdata = (boog_seasons |> select(cumsum_BOOG_start) |> rename(cumsum_BOOG = cumsum_BOOG_start)), type="response") 
+            .default = predict(hof_rp_model, newdata = (boog_seasons |> select(cumsum_BOOG_relief) |> rename(cumsum_BOOG = cumsum_BOOG_relief)), type="response") 
         ),
         bbwaa_in_progress_relief_rate = case_when(
             pitcher == 0 ~ 0,
             cumsum_BOOG_relief == 0 ~ 0,
-            .default = predict(bbwaa_rp_model, newdata = (boog_seasons |> select(cumsum_BOOG_start) |> rename(cumsum_BOOG = cumsum_BOOG_start)), type="response") 
+            .default = predict(bbwaa_rp_model, newdata = (boog_seasons |> select(cumsum_BOOG_relief) |> rename(cumsum_BOOG = cumsum_BOOG_relief)), type="response") 
         ),
         hof_in_progress_pitcher_rate = case_when(
             pitcher == 0 ~ 0,
