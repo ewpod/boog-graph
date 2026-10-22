@@ -39,7 +39,8 @@ pitching_data <- bind_rows(starting_pitching_data, relief_pitching_data) |>
     rename(league = League, season = Season, team = Team, age = Age, fangraphs_id = PlayerId, mlbam_id = MLBAMID) |>
     select(!Name) |>
     select(!key_bbref.x:name.y) |>
-    mutate(WAA = WAR - (round(IP) * (sum(WAR) / sum(round(IP)))), .by = c(league, season)) |>
+    mutate(outs = 3 * floor(IP) + if_else(IP - floor(IP) < 0.05, 0, if_else(IP - floor(IP) < 0.15, 1, 2))) |>
+    mutate(WAA = WAR - (outs * (sum(WAR) / sum(outs))), .by = c(league, season)) |>
     select(!league) |> select(!WAR) |>
     relocate(name) |>
     summarize(WAA = sum(WAA), BF = sum(BF), .by = c(name, season, age, fangraphs_id, mlbam_id, key_person, role)) |>
@@ -119,34 +120,24 @@ boog_seasons <- combined_data |>
     ) |> select(!WAA_bat:PA) |> select(!started:relieved) |>
     group_by(key_person) |>
     mutate(
-        delta = min(season) - min(age), 
-        max_season = if_else(active == 1, curr_season, max(season)),
-        pitcher = if_else(sum(BOOG_pitch) > sum(BOOG_bat), 1, 0)
-    ) |> select(!BOOG_bat:BOOG_pitch) |>
+        delta = min(season) - min(age), max_season = if_else(active == 1, curr_season, max(season)), pitcher = if_else(sum(BOOG_pitch) > sum(BOOG_bat), 1, 0)) |> 
+    select(!BOOG_bat:BOOG_pitch) |>
     complete(age = full_seq(age, 1)) |>
     arrange(age) |>
     fill(name, hof, bbwaa, active, delta, max_season, pitcher, .direction = "downup") |>
     ungroup() |> 
-    mutate(
-        season = if_else(is.na(season), age + delta, season)
-    ) |> select(!delta) |>
+    mutate(season = if_else(is.na(season), age + delta, season)) |> 
+    select(!delta) |>
     arrange(season) |>
+    mutate(season_BOOG = replace_na(season_BOOG, 0), BOOG_start = replace_na(BOOG_start, 0), BOOG_relief = replace_na(BOOG_relief, 0)) |> 
     mutate(
-        season_BOOG = replace_na(season_BOOG, 0),
-        BOOG_start = replace_na(BOOG_start, 0),
-        BOOG_relief = replace_na(BOOG_relief, 0)
-    ) |> mutate(
         cumsum_BOOG = cumsum(season_BOOG),
         cumsum_BOOG_start = cumsum(BOOG_start),
         cumsum_BOOG_relief = cumsum(BOOG_relief),
         career_BOOG = sum(season_BOOG),
         .by = key_person
-    ) |> mutate(
-        hof_rate = 0.0,
-        bbwaa_rate = 0.0,
-        starter = if_else(pitcher & cumsum_BOOG_start >= cumsum_BOOG_relief, 1, 0)
-    ) |> relocate(pitcher, .after = season) |>
-    relocate(starter, .after = pitcher)
+    ) |> mutate(hof_rate = 0.0, bbwaa_rate = 0.0, starter = if_else(pitcher & cumsum_BOOG_start >= cumsum_BOOG_relief, 1, 0)) |> 
+    relocate(pitcher, .after = season) |> relocate(starter, .after = pitcher)
 
 print("Generating HOF data")
 
@@ -260,23 +251,61 @@ hof_pace <- bind_rows(median_hof_batter, median_hof_pitcher, median_bbwaa_batter
 
 print("Calculating logistic regressions...")
 
-logit_young_batter <- boog_seasons |> filter(cumsum_BOOG > 0, age <= 21, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 0, .by = key_person) |> 
-    select(hof, bbwaa, cumsum_BOOG)
+logit_young_batter <- boog_seasons |> filter(
+    cumsum_BOOG > 0, 
+    age <= 21, 
+    min(season) >= first_season_for_logit, 
+    (max_season <= (curr_season - 15) | hof), 
+    pitcher == 0, 
+    .by = key_person
+) |> select(hof, bbwaa, cumsum_BOOG)
 
-logit_final_batter <- boog_seasons |> filter(cumsum_BOOG > 0, season == max_season, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 0, .by = key_person) |>
-    select(hof, bbwaa, cumsum_BOOG)
+logit_final_batter <- boog_seasons |> filter(
+    cumsum_BOOG > 0,
+    season == max_season,
+    min(season) >= first_season_for_logit,
+    (max_season <= (curr_season - 15) | hof),
+    pitcher == 0,
+    .by = key_person
+) |> select(hof, bbwaa, cumsum_BOOG)
 
-logit_young_sp <- boog_seasons |> filter(cumsum_BOOG > 0, age <= 21, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 1, starter == 1, .by = key_person) |> 
-    select(hof, bbwaa, cumsum_BOOG)
+logit_young_sp <- boog_seasons |> filter(
+    cumsum_BOOG > 0,
+    age <= 21,
+    min(season) >= first_season_for_logit,
+    (max_season <= (curr_season - 15) | hof),
+    pitcher == 1,
+    starter == 1,
+    .by = key_person
+) |> select(hof, bbwaa, cumsum_BOOG)
 
-logit_young_rp <- boog_seasons |> filter(cumsum_BOOG > 0, age <= 21, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof) & pitcher == 1, starter == 0, .by = key_person) |> 
-    select(hof, bbwaa, cumsum_BOOG)
+logit_young_rp <- boog_seasons |> filter(
+    cumsum_BOOG > 0,
+    age <= 21,
+    min(season) >= first_season_for_logit,
+    (max_season <= (curr_season - 15) | hof),
+    pitcher == 1,
+    starter == 0,
+    .by = key_person) |> select(hof, bbwaa, cumsum_BOOG)
 
-logit_final_sp <- boog_seasons |> filter(cumsum_BOOG > 0, season == max_season, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 1, starter == 1, .by = key_person) |>
-    select(hof, bbwaa, cumsum_BOOG)
+logit_final_sp <- boog_seasons |> filter(
+    cumsum_BOOG > 0,
+    season == max_season,
+    min(season) >= first_season_for_logit,
+    (max_season <= (curr_season - 15) | hof),
+    pitcher == 1,
+    starter == 1,
+    .by = key_person
+) |> select(hof, bbwaa, cumsum_BOOG)
 
-logit_final_rp <- boog_seasons |> filter(cumsum_BOOG > 0, season == max_season, min(season) >= first_season_for_logit, (max_season <= (curr_season - 15) | hof), pitcher == 1, starter == 0, .by = key_person) |>
-    select(hof, bbwaa, cumsum_BOOG)
+logit_final_rp <- boog_seasons |> filter(
+    cumsum_BOOG > 0,
+    season == max_season,
+    min(season) >= first_season_for_logit,
+    (max_season <= (curr_season - 15) | hof),
+    pitcher == 1,
+    starter == 0,
+.by = key_person) |> select(hof, bbwaa, cumsum_BOOG)
 
 hof_young_batter_model <- glm(hof ~., family = binomial(link = "logit"), data = (logit_young_batter |> select(!bbwaa)))
 bbwaa_young_batter_model <- glm(bbwaa ~., family = binomial(link = "logit"), data = (logit_young_batter |> select(!hof)))
